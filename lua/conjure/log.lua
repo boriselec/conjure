@@ -57,7 +57,7 @@ local function on_new_log_buf(buf)
     nvim.buf_set_option(buf, "syntax", "on")
   else
   end
-  return nvim.buf_set_lines(buf, 0, -1, false, {str.join({client.get("comment-prefix"), "Sponsored by @", a.get(sponsors, a.inc(math.floor(a.rand(a.dec(a.count(sponsors)))))), " \226\157\164"})})
+  return nvim.buf_set_lines(buf, 0, -1, false, {str.join({client.get("comment-prefix")})})
 end
 _2amodule_locals_2a["on-new-log-buf"] = on_new_log_buf
 local function upsert_buf()
