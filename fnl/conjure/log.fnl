@@ -51,10 +51,7 @@
 
   (nvim.buf_set_lines
     buf 0 -1 false
-    [(str.join [(client.get :comment-prefix)
-                "Sponsored by @"
-                (a.get sponsors (a.inc (math.floor (a.rand (a.dec (a.count sponsors))))))
-                " ❤"])]))
+    [(str.join [(client.get :comment-prefix)])]))
 
 (defn- upsert-buf []
   (buffer.upsert-hidden
