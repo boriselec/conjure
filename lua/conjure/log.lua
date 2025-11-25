@@ -42,7 +42,7 @@ local function on_new_log_buf(buf)
     vim.bo[buf]["syntax"] = "on"
   else
   end
-  return nvim.buf_set_lines(buf, 0, -1, false, {str.join({client.get("comment-prefix")})})
+  return vim.api.nvim_buf_set_lines(buf, 0, -1, false, {str.join({client.get("comment-prefix")})})
 end
 local function upsert_buf()
   return buffer["upsert-hidden"](log_buf_name(), client.wrap(on_new_log_buf))
