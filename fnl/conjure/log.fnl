@@ -55,7 +55,7 @@
 
   (vim.api.nvim_buf_set_lines
     buf 0 -1 false
-    [(str.join [(client.get :comment-prefix)])]))
+    []))
 
 (fn upsert-buf []
   (buffer.upsert-hidden
