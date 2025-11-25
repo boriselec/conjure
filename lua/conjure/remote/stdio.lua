@@ -1,24 +1,14 @@
-local _2afile_2a = "fnl/conjure/remote/stdio.fnl"
-local _2amodule_name_2a = "conjure.remote.stdio"
-local _2amodule_2a
-do
-  package.loaded[_2amodule_name_2a] = {}
-  _2amodule_2a = package.loaded[_2amodule_name_2a]
-end
-local _2amodule_locals_2a
-do
-  _2amodule_2a["aniseed/locals"] = {}
-  _2amodule_locals_2a = (_2amodule_2a)["aniseed/locals"]
-end
-local autoload = (require("conjure.aniseed.autoload")).autoload
-local a, client, log, nvim, str = autoload("conjure.aniseed.core"), autoload("conjure.client"), autoload("conjure.log"), autoload("conjure.aniseed.nvim"), autoload("conjure.aniseed.string")
-do end (_2amodule_locals_2a)["a"] = a
-_2amodule_locals_2a["client"] = client
-_2amodule_locals_2a["log"] = log
-_2amodule_locals_2a["nvim"] = nvim
-_2amodule_locals_2a["str"] = str
-local uv = vim.loop
-_2amodule_locals_2a["uv"] = uv
+-- [nfnl] fnl/conjure/remote/stdio.fnl
+local _local_1_ = require("conjure.nfnl.module")
+local autoload = _local_1_.autoload
+local define = _local_1_.define
+local a = autoload("conjure.nfnl.core")
+local str = autoload("conjure.nfnl.string")
+local client = autoload("conjure.client")
+local log = autoload("conjure.log")
+local M = define("conjure.remote.stdio")
+local vim = _G.vim
+local uv = vim.uv
 local function parse_prompt(s, pat)
   if s:find(pat) then
     return true, s:gsub(pat, "")
@@ -26,28 +16,24 @@ local function parse_prompt(s, pat)
     return false, s
   end
 end
-_2amodule_locals_2a["parse-prompt"] = parse_prompt
-local function parse_cmd(x)
+M["parse-cmd"] = function(x)
   if a["table?"](x) then
     return {cmd = a.first(x), args = a.rest(x)}
   elseif a["string?"](x) then
-    return parse_cmd(str.split(x, "%s"))
+    return M["parse-cmd"](str.split(x, "%s"))
   else
     return nil
   end
 end
-_2amodule_2a["parse-cmd"] = parse_cmd
 local function extend_env(vars)
-  local function _5_(_3_)
-    local _arg_4_ = _3_
-    local k = _arg_4_[1]
-    local v = _arg_4_[2]
+  local function _5_(_4_)
+    local k = _4_[1]
+    local v = _4_[2]
     return (k .. "=" .. v)
   end
-  return a.map(_5_, a["kv-pairs"](a.merge(nvim.fn.environ(), vars)))
+  return a.map(_5_, a["kv-pairs"](a.merge(vim.fn.environ(), vars)))
 end
-_2amodule_locals_2a["extend-env"] = extend_env
-local function start(opts)
+M.start = function(opts)
   local stdin = uv.new_pipe(false)
   local stdout = uv.new_pipe(false)
   local stderr = uv.new_pipe(false)
@@ -79,7 +65,7 @@ local function start(opts)
       end
       pcall(_11_)
       local function _12_()
-        return (repl.handle):close()
+        return repl.handle:close()
       end
       pcall(_12_)
     else
@@ -95,14 +81,16 @@ local function start(opts)
     if (next_msg and not repl.current) then
       table.remove(repl.queue, 1)
       a.assoc(repl, "current", next_msg)
-      log.dbg("send", next_msg.code)
+      log.dbg(("remote.stdio.next-in-queue; stdin:write next-msg.code >>" .. a["pr-str"](next_msg.code) .. "<<"))
       return stdin:write(next_msg.code)
     else
       return nil
     end
   end
   local function on_message(source, err, chunk)
-    log.dbg("receive", source, err, chunk)
+    log.dbg(("remote.stdio.on-message; receive source >>" .. source .. "<<"))
+    log.dbg(("remote.stdio.on-message; receive err >>" .. a["pr-str"](err) .. "<<"))
+    log.dbg(("remote.stdio.on-message; receive chunk >>" .. a["pr-str"](chunk) .. "<<"))
     if err then
       opts["on-error"](err)
       return destroy()
@@ -161,13 +149,17 @@ local function start(opts)
     next_in_queue()
     return nil
   end
+  local function immediate_send(code)
+    stdin:write(code)
+    return nil
+  end
   local function send_signal(signal)
     uv.process_kill(repl.handle, signal)
     return nil
   end
-  local _let_27_ = parse_cmd(opts.cmd)
-  local cmd = _let_27_["cmd"]
-  local args = _let_27_["args"]
+  local _let_27_ = M["parse-cmd"](opts.cmd)
+  local cmd = _let_27_.cmd
+  local args = _let_27_.args
   local handle, pid_or_err = uv.spawn(cmd, {stdio = {stdin, stdout, stderr}, args = args, env = extend_env(a["merge!"]({INPUTRC = "/dev/null", TERM = "dumb"}, opts.env))}, client["schedule-wrap"](on_exit))
   if handle then
     stdout:read_start(client["schedule-wrap"](on_stdout))
@@ -176,7 +168,7 @@ local function start(opts)
       return opts["on-success"]()
     end
     client.schedule(_28_)
-    return a["merge!"](repl, {handle = handle, pid = pid_or_err, send = send, opts = opts, ["send-signal"] = send_signal, destroy = destroy})
+    return a["merge!"](repl, {handle = handle, pid = pid_or_err, send = send, ["immediate-send"] = immediate_send, opts = opts, ["send-signal"] = send_signal, destroy = destroy})
   else
     local function _29_()
       return opts["on-error"](pid_or_err)
@@ -185,5 +177,4 @@ local function start(opts)
     return destroy()
   end
 end
-_2amodule_2a["start"] = start
-return _2amodule_2a
+return M

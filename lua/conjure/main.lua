@@ -1,21 +1,13 @@
-local _2afile_2a = "fnl/conjure/main.fnl"
-local _2amodule_name_2a = "conjure.main"
-local _2amodule_2a
-do
-  package.loaded[_2amodule_name_2a] = {}
-  _2amodule_2a = package.loaded[_2amodule_name_2a]
+-- [nfnl] fnl/conjure/main.fnl
+local _local_1_ = require("conjure.nfnl.module")
+local autoload = _local_1_.autoload
+local define = _local_1_.define
+local mapping = autoload("conjure.mapping")
+local config = autoload("conjure.config")
+local log = autoload("conjure.log")
+local M = define("conjure.main")
+M.main = function()
+  mapping.init(config.filetypes())
+  return log["setup-auto-flush"]()
 end
-local _2amodule_locals_2a
-do
-  _2amodule_2a["aniseed/locals"] = {}
-  _2amodule_locals_2a = (_2amodule_2a)["aniseed/locals"]
-end
-local autoload = (require("conjure.aniseed.autoload")).autoload
-local config, mapping = autoload("conjure.config"), autoload("conjure.mapping")
-do end (_2amodule_locals_2a)["config"] = config
-_2amodule_locals_2a["mapping"] = mapping
-local function main()
-  return mapping.init(config.filetypes())
-end
-_2amodule_2a["main"] = main
-return _2amodule_2a
+return M

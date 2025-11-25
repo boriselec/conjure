@@ -1,36 +1,38 @@
-(module conjure.remote.stdio
-  {autoload {a conjure.aniseed.core
-             nvim conjure.aniseed.nvim
-             str conjure.aniseed.string
-             client conjure.client
-             log conjure.log}})
+(local {: autoload : define} (require :conjure.nfnl.module))
+(local a (autoload :conjure.nfnl.core))
+(local str (autoload :conjure.nfnl.string))
+(local client (autoload :conjure.client))
+(local log (autoload :conjure.log))
 
-(def- uv vim.loop)
+(local M (define :conjure.remote.stdio))
+(local vim _G.vim)
+(local uv vim.uv)
 
-(defn- parse-prompt [s pat]
+
+(fn parse-prompt [s pat]
   (if (s:find pat)
     (values true (s:gsub pat ""))
     (values false s)))
 
-(defn parse-cmd [x]
+(fn M.parse-cmd [x]
   (if
     (a.table? x)
     {:cmd (a.first x)
      :args (a.rest x)}
 
     (a.string? x)
-    (parse-cmd (str.split x "%s"))))
+    (M.parse-cmd (str.split x "%s"))))
 
-(defn- extend-env [vars]
+(fn extend-env [vars]
   (->> (a.merge
-         (nvim.fn.environ)
+         (vim.fn.environ)
          vars)
        (a.kv-pairs)
        (a.map
          (fn [[k v]]
            (.. k "=" v)))))
 
-(defn start [opts]
+(fn M.start [opts]
   "Starts an external REPL and gives you hooks to send code to it and read
   responses back out. Tying an input to a result is near enough impossible
   through this stdio medium, so it's a best effort.
@@ -45,10 +47,9 @@
   * opts.on-exit: Called on exit with the code and signal."
   (let [stdin (uv.new_pipe false)
         stdout (uv.new_pipe false)
-        stderr (uv.new_pipe false)]
-
-    (var repl {:queue []
-               :current nil})
+        stderr (uv.new_pipe false)
+        repl {:queue []
+              :current nil}]
 
     (fn destroy []
       ;; https://teukka.tech/vimloop.html
@@ -71,11 +72,14 @@
         (when (and next-msg (not repl.current))
           (table.remove repl.queue 1)
           (a.assoc repl :current next-msg)
-          (log.dbg "send" next-msg.code)
+          (log.dbg (.. "remote.stdio.next-in-queue; stdin:write next-msg.code >>" (a.pr-str next-msg.code) "<<"))
           (stdin:write next-msg.code))))
 
     (fn on-message [source err chunk]
-      (log.dbg "receive" source err chunk)
+      (log.dbg (.. "remote.stdio.on-message; receive source >>" source "<<"))
+      (log.dbg (.. "remote.stdio.on-message; receive err >>" (a.pr-str err) "<<"))
+      (log.dbg (.. "remote.stdio.on-message; receive chunk >>" (a.pr-str chunk) "<<"))
+      ; (log.dbg (.. "receive" source err chunk))
       (if err
         (do
           (opts.on-error err)
@@ -113,11 +117,15 @@
       (next-in-queue)
       nil)
 
+    (fn immediate-send [code]
+      (stdin:write code)
+      nil)
+
     (fn send-signal [signal]
       (uv.process_kill repl.handle signal)
       nil)
 
-    (let [{: cmd : args} (parse-cmd opts.cmd)
+    (let [{: cmd : args} (M.parse-cmd opts.cmd)
           (handle pid-or-err)
           (uv.spawn cmd {:stdio [stdin stdout stderr]
                          :args args
@@ -140,9 +148,12 @@
             {:handle handle
              :pid pid-or-err
              :send send
+             :immediate-send immediate-send
              :opts opts
              :send-signal send-signal
              :destroy destroy}))
         (do
           (client.schedule #(opts.on-error pid-or-err))
           (destroy))))))
+
+M

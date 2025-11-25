@@ -1,44 +1,48 @@
-(module conjure.log
-  {autoload {a conjure.aniseed.core
-             nvim conjure.aniseed.nvim
-             str conjure.aniseed.string
-             buffer conjure.buffer
-             client conjure.client
-             hook conjure.hook
-             config conjure.config
-             view conjure.aniseed.view
-             text conjure.text
-             editor conjure.editor
-             timer conjure.timer}
-   require {sponsors conjure.sponsors}})
+(local {: autoload : define} (require :conjure.nfnl.module))
+(local core (autoload :conjure.nfnl.core))
+(local str (autoload :conjure.nfnl.string))
+(local buffer (autoload :conjure.buffer))
+(local client (autoload :conjure.client))
+(local hook (autoload :conjure.hook))
+(local config (autoload :conjure.config))
+(local text (autoload :conjure.text))
+(local editor (autoload :conjure.editor))
+(local timer (autoload :conjure.timer))
+(local sponsors (require :conjure.sponsors))
+(local vim _G.vim)
 
-(defonce- state
-  {:last-open-cmd :vsplit
-   :hud {:id nil
-         :timer nil
-         :created-at-ms 0
-         :low-priority-spam {:streak 0
-                             :help-displayed? false}}
-   :jump-to-latest {:mark nil
-                    :ns (nvim.create_namespace "conjure_log_jump_to_latest")}})
+(local M (define :conjure.log))
 
-(defn- break []
+(set M.state
+  (or
+    M.state
+    {:last-open-cmd :vsplit
+     :buffers {}
+     :hud {:id nil
+           :timer nil
+           :created-at-ms 0
+           :low-priority-spam {:streak 0
+                               :help-displayed? false}}
+     :jump-to-latest {:mark nil
+                      :ns (vim.api.nvim_create_namespace "conjure_log_jump_to_latest")}}))
+
+(fn break []
   (str.join
     [(client.get :comment-prefix)
      (string.rep "-" (config.get-in [:log :break_length]))]))
 
-(defn- state-key-header []
+(fn state-key-header []
   (str.join [(client.get :comment-prefix) "State: " (client.state-key)]))
 
-(defn- log-buf-name []
-  (str.join ["conjure-log-" (nvim.fn.getpid) (client.get :buf-suffix)]))
+(fn log-buf-name []
+  (str.join ["conjure-log-" (vim.fn.getpid) (client.get :buf-suffix)]))
 
-(defn log-buf? [name]
-  (text.ends-with name (log-buf-name)))
+(fn M.log-buf? [name]
+  (vim.endswith name (log-buf-name)))
 
-(defn- on-new-log-buf [buf]
-  (set state.jump-to-latest.mark
-       (nvim.buf_set_extmark buf state.jump-to-latest.ns 0 0 {}))
+(fn on-new-log-buf [buf]
+  (set M.state.jump-to-latest.mark
+       (vim.api.nvim_buf_set_extmark buf M.state.jump-to-latest.ns 0 0 {}))
 
   (when (and vim.diagnostic (= false (config.get-in [:log :diagnostics])))
     (if (= 1 (vim.fn.has "nvim-0.10"))
@@ -47,89 +51,84 @@
 
   (when (and vim.treesitter (= false (config.get-in [:log :treesitter])))
     (vim.treesitter.stop buf)
-    (nvim.buf_set_option buf :syntax "on"))
+    (tset vim.bo buf :syntax "on"))
 
-  (nvim.buf_set_lines
+  (vim.api.nvim_buf_set_lines
     buf 0 -1 false
     [(str.join [(client.get :comment-prefix)])]))
 
-(defn- upsert-buf []
+(fn upsert-buf []
   (buffer.upsert-hidden
     (log-buf-name)
     (client.wrap on-new-log-buf)))
 
-(defn clear-close-hud-passive-timer []
-  (a.update-in state [:hud :timer] timer.destroy))
+(fn M.clear-close-hud-passive-timer []
+  (core.update-in M.state [:hud :timer] timer.destroy))
 
 (hook.define
   :close-hud
   (fn []
-    (when state.hud.id
-      (pcall nvim.win_close state.hud.id true)
-      (set state.hud.id nil))))
+    (when M.state.hud.id
+      (pcall vim.api.nvim_win_close M.state.hud.id true)
+      (set M.state.hud.id nil))))
 
-(defn close-hud []
-  (clear-close-hud-passive-timer)
+(fn M.close-hud []
+  (M.clear-close-hud-passive-timer)
   (hook.exec :close-hud))
 
-(defn hud-lifetime-ms []
-  (- (vim.loop.now) state.hud.created-at-ms))
+(fn M.hud-lifetime-ms []
+  (- (vim.uv.now) M.state.hud.created-at-ms))
 
-(defn close-hud-passive []
-  (when (and state.hud.id
-             (> (hud-lifetime-ms)
+(fn M.close-hud-passive []
+  (when (and M.state.hud.id
+             (> (M.hud-lifetime-ms)
                 (config.get-in [:log :hud :minimum_lifetime_ms])))
-    (let [original-timer-id state.hud.timer-id
-          delay (config.get-in [:log :hud :passive_close_delay])]
+    (let [delay (config.get-in [:log :hud :passive_close_delay])]
       (if (= 0 delay)
-        (close-hud)
-        (when (not (a.get-in state [:hud :timer]))
-          (a.assoc-in
-            state [:hud :timer]
-            (timer.defer close-hud delay)))))))
+        (M.close-hud)
+        (when (not (core.get-in M.state [:hud :timer]))
+          (core.assoc-in
+            M.state [:hud :timer]
+            (timer.defer M.close-hud delay)))))))
 
-(defn- break-lines [buf]
+(fn break-lines [buf]
   (let [break-str (break)]
-    (->> (nvim.buf_get_lines buf 0 -1 false)
-         (a.kv-pairs)
-         (a.filter
-           (fn [[n s]]
+    (->> (vim.api.nvim_buf_get_lines buf 0 -1 false)
+         (core.kv-pairs)
+         (core.filter
+           (fn [[_n s]]
              (= s break-str)))
-         (a.map a.first))))
+         (core.map core.first))))
 
-(defn- set-win-opts! [win]
-  (nvim.win_set_option
-    win :wrap
-    (if (config.get-in [:log :wrap])
-      true
-      false))
-  (nvim.win_set_option win :foldmethod :marker)
-  (nvim.win_set_option win :foldmarker (.. (config.get-in [:log :fold :marker :start])
-                                           ","
-                                           (config.get-in [:log :fold :marker :end])))
-  (nvim.win_set_option win :foldlevel 0))
+(fn set-win-opts! [win]
+  (tset vim.wo win :wrap (if (config.get-in [:log :wrap]) true false))
+  (tset vim.wo win :foldmethod :marker)
+  (tset vim.wo win :foldmarker (.. (config.get-in [:log :fold :marker :start])
+                                  ","
+                                  (config.get-in [:log :fold :marker :end])))
+  (tset vim.wo win :foldlevel 0))
 
-(defn- in-box? [box pos]
+(fn in-box? [box pos]
   (and (>= pos.x box.x1) (<= pos.x box.x2)
        (>= pos.y box.y1) (<= pos.y box.y2)))
 
-(defn- flip-anchor [anchor n]
+(fn flip-anchor [anchor n]
   (let [chars [(anchor:sub 1 1)
                (anchor:sub 2)]
         flip {:N :S
               :S :N
               :E :W
               :W :E}]
-    (str.join (a.update chars n #(a.get flip $1)))))
+    (str.join (core.update chars n #(core.get flip $1)))))
 
-(defn- pad-box [box padding]
+(fn pad-box [box padding]
   (-> box
-      (a.update :x1 #(- $1 padding.x))
-      (a.update :y1 #(- $1 padding.y))
-      (a.update :x2 #(+ $1 padding.x))
-      (a.update :y2 #(+ $1 padding.y))))
+      (core.update :x1 #(- $1 padding.x))
+      (core.update :y1 #(- $1 padding.y))
+      (core.update :x2 #(+ $1 padding.x))
+      (core.update :y2 #(+ $1 padding.y))))
 
-(defn- hud-window-pos [anchor size rec?]
+(fn hud-window-pos [anchor size rec?]
   (let [north 0 west 0
         south (- (editor.height) 2)
         east (editor.width)
@@ -148,9 +147,10 @@
                                   :box {:y1 north :x1 west
                                         :y2 (+ north size.height) :x2 (+ west size.width)}}
                   (do
-                    (nvim.err_writeln "g:conjure#log#hud#anchor must be one of: NE, SE, SW, NW")
+                    (vim.notify "g:conjure#log#hud#anchor must be one of: NE, SE, SW, NW" 
+                                vim.log.levels.ERROR)
                     (hud-window-pos :NE size)))
-                (a.assoc :anchor anchor))]
+                (core.assoc :anchor anchor))]
 
     (if (and (not rec?)
              (in-box?
@@ -165,42 +165,42 @@
         size true)
       pos)))
 
-(defn- current-window-floating? []
-  (= :number (type (a.get (nvim.win_get_config 0) :zindex))))
+(fn current-window-floating? []
+  (= :number (type (core.get (vim.api.nvim_win_get_config 0) :zindex))))
 
-(def- low-priority-streak-threshold 5)
+(local low-priority-streak-threshold 5)
 
-(defn- handle-low-priority-spam! [low-priority?]
+(fn handle-low-priority-spam! [low-priority?]
   ;; When we see a bunch of low-priority? messages opening the HUD repeatedly
   ;; we display a bit of help _once_ that can prevent this spam in the future
   ;; for the user.
-  (when (not (a.get-in state [:hud :low-priority-spam :help-displayed?]))
+  (when (not (core.get-in M.state [:hud :low-priority-spam :help-displayed?]))
     (if low-priority?
-      (a.update-in state [:hud :low-priority-spam :streak] a.inc)
-      (a.assoc-in state [:hud :low-priority-spam :streak] 0))
+      (core.update-in M.state [:hud :low-priority-spam :streak] core.inc)
+      (core.assoc-in M.state [:hud :low-priority-spam :streak] 0))
 
-    (when (> (a.get-in state [:hud :low-priority-spam :streak]) low-priority-streak-threshold)
+    (when (> (core.get-in M.state [:hud :low-priority-spam :streak]) low-priority-streak-threshold)
       (let [pref (client.get :comment-prefix)]
         (client.schedule
-          (. *module* :append)
+          (. (require :conjure.log) :append)
           [(.. pref "Is the HUD popping up too much and annoying you in this project?")
            (.. pref "Set this option to suppress this kind of output for this session.")
            (.. pref "  :let g:conjure#log#hud#ignore_low_priority = v:true")]
           {:break? true}))
-      (a.assoc-in state [:hud :low-priority-spam :help-displayed?] true))))
+      (core.assoc-in M.state [:hud :low-priority-spam :help-displayed?] true))))
 
 (hook.define
   :display-hud
   (fn [opts]
     (let [buf (upsert-buf)
-          last-break (a.last (break-lines buf))
-          line-count (nvim.buf_line_count buf)
+          last-break (core.last (break-lines buf))
+          line-count (vim.api.nvim_buf_line_count buf)
           size {:width (editor.percent-width (config.get-in [:log :hud :width]))
                 :height (editor.percent-height (config.get-in [:log :hud :height]))}
           pos (hud-window-pos (config.get-in [:log :hud :anchor]) size)
           border (config.get-in [:log :hud :border])
           win-opts
-          (a.merge
+          (core.merge
             {:relative :editor
              :row pos.row
              :col pos.col
@@ -213,31 +213,30 @@
              :zindex (config.get-in [:log :hud :zindex])
              :border border})]
 
-      (when (and state.hud.id (not (nvim.win_is_valid state.hud.id)))
-        (close-hud))
+      (when (and M.state.hud.id (not (vim.api.nvim_win_is_valid M.state.hud.id)))
+        (M.close-hud))
 
-      (if state.hud.id
-        (nvim.win_set_buf state.hud.id buf)
+      (if M.state.hud.id
+        (vim.api.nvim_win_set_buf M.state.hud.id buf)
         (do
-          (handle-low-priority-spam! (a.get opts :low-priority?))
-          (set state.hud.id (nvim.open_win buf false win-opts))
-          (set-win-opts! state.hud.id)))
+          (handle-low-priority-spam! (core.get opts :low-priority?))
+          (set M.state.hud.id (vim.api.nvim_open_win buf false win-opts))
+          (set-win-opts! M.state.hud.id)))
 
-      (set state.hud.created-at-ms (vim.loop.now))
+      (set M.state.hud.created-at-ms (vim.uv.now))
 
       (if last-break
         (do
-          (nvim.win_set_cursor state.hud.id [1 0])
-          (nvim.win_set_cursor
-            state.hud.id
+          (vim.api.nvim_win_set_cursor M.state.hud.id [1 0])
+          (vim.api.nvim_win_set_cursor M.state.hud.id
             [(math.min
                (+ last-break
-                  (a.inc (math.floor (/ win-opts.height 2))))
+                  (core.inc (math.floor (/ win-opts.height 2))))
                line-count)
              0]))
-        (nvim.win_set_cursor state.hud.id [line-count 0])))))
+        (vim.api.nvim_win_set_cursor M.state.hud.id [line-count 0])))))
 
-(defn- display-hud [opts]
+(fn display-hud [opts]
   (when (and (config.get-in [:log :hud :enabled])
 
              ;; Don't display when the user is already doing something in a floating window.
@@ -246,103 +245,101 @@
              ;; Don't display low priority messages if configured.
              (or (not (config.get-in [:log :hud :ignore_low_priority]))
                  (and (config.get-in [:log :hud :ignore_low_priority])
-                      (not (a.get opts :low-priority?)))))
-    (clear-close-hud-passive-timer)
+                      (not (core.get opts :low-priority?)))))
+    (M.clear-close-hud-passive-timer)
     (hook.exec :display-hud opts)))
 
-(defn- win-visible? [win]
-  (= (nvim.fn.tabpagenr)
-     (a.first (nvim.fn.win_id2tabwin win))))
+(fn win-visible? [win]
+  (= (vim.fn.tabpagenr)
+     (core.first (vim.fn.win_id2tabwin win))))
 
-(defn- with-buf-wins [buf f]
-  (a.run!
+(fn with-buf-wins [buf f]
+  (core.run!
     (fn [win]
-      (when (= buf (nvim.win_get_buf win))
+      (when (= buf (vim.api.nvim_win_get_buf win))
         (f win)))
-    (nvim.list_wins)))
+    (vim.api.nvim_list_wins)))
 
-(defn- win-botline [win]
+(fn win-botline [win]
   (-> win
-      (nvim.fn.getwininfo)
-      (a.first)
-      (a.get :botline)))
+      (vim.fn.getwininfo)
+      (core.first)
+      (core.get :botline)))
 
-(defn- trim [buf]
-  (let [line-count (nvim.buf_line_count buf)]
+(fn trim [buf]
+  (let [line-count (vim.api.nvim_buf_line_count buf)]
     (when (> line-count (config.get-in [:log :trim :at]))
       (let [target-line-count (- line-count (config.get-in [:log :trim :to]))
             break-line
-            (a.some
+            (core.some
               (fn [line]
                 (when (>= line target-line-count)
                   line))
               (break-lines buf))]
 
         (when break-line
-          (nvim.buf_set_lines
-            buf 0
-            break-line
-            false [])
+          (vim.api.nvim_buf_set_lines buf 0 break-line false [])
 
           ;; This hack keeps all log window view ports correct after trim.
           ;; Without it the text moves off screen in the HUD.
-          (let [line-count (nvim.buf_line_count buf)]
-            (with-buf-wins
-              buf
-              (fn [win]
-                (let [[row col] (nvim.win_get_cursor win)]
-                  (nvim.win_set_cursor win [1 0])
-                  (nvim.win_set_cursor win [row col]))))))))))
+          (with-buf-wins
+            buf
+            (fn [win]
+              (let [[row col] (vim.api.nvim_win_get_cursor win)]
+                (vim.api.nvim_win_set_cursor win [1 0])
+                (vim.api.nvim_win_set_cursor win [row col])))))))))
 
-(defn last-line [buf extra-offset]
-  (a.first
-    (nvim.buf_get_lines
+(fn M.last-line [buf extra-offset]
+  (core.first
+    (vim.api.nvim_buf_get_lines
       (or buf (upsert-buf))
       (+ -2 (or extra-offset 0)) -1 false)))
 
-(def cursor-scroll-position->command
+(set M.cursor-scroll-position->command
   {:top "normal zt"
    :center "normal zz"
    :bottom "normal zb"
    :none nil})
 
-(defn jump-to-latest []
+(fn M.jump-to-latest []
+  (M.close-hud)
   (let [buf (upsert-buf)
-        last-eval-start (nvim.buf_get_extmark_by_id
-                          buf state.jump-to-latest.ns
-                          state.jump-to-latest.mark {})]
+        last-eval-start (vim.api.nvim_buf_get_extmark_by_id
+                          buf M.state.jump-to-latest.ns
+                          M.state.jump-to-latest.mark {})]
     (with-buf-wins
       buf
       (fn [win]
-        (pcall #(nvim.win_set_cursor win last-eval-start))
+        (pcall #(vim.api.nvim_win_set_cursor win last-eval-start))
 
-        (let [cmd (a.get
-                    cursor-scroll-position->command
+        (let [cmd (core.get
+                    M.cursor-scroll-position->command
                     (config.get-in [:log :jump_to_latest :cursor_scroll_position]))]
           (when cmd
-            (nvim.win_call win (fn [] (nvim.command cmd)))))))))
+            (vim.api.nvim_win_call win (fn [] (vim.cmd cmd)))))))))
 
-(defn append [lines opts]
-  (let [line-count (a.count lines)]
+(fn M.immediate-append [lines opts]
+  (let [line-count (core.count lines)]
     (when (> line-count 0)
       (var visible-scrolling-log? false)
+      (var visible-log? false)
 
       (let [buf (upsert-buf)
-            join-first? (a.get opts :join-first?)
+            join-first? (core.get opts :join-first?)
 
             ;; A failsafe for newlines in lines. They _should_ be split up by
             ;; the calling code but this means we at least print the line
             ;; rather than throwing an error.
             ;; We also ensure every value _is_ a string. If we have a nil in
             ;; here it will at least be the right type for the gsub.
-            lines (a.map
+            lines (core.map
                     (fn [line]
                       (string.gsub (tostring line) "\n" "↵"))
                     lines)
 
             lines (if (<= line-count
                           (config.get-in [:log :strip_ansi_escape_sequences_line_limit]))
-                    (a.map text.strip-ansi-escape-sequences lines)
+                    (core.map text.strip-ansi-escape-sequences lines)
                     lines)
             comment-prefix (client.get :comment-prefix)
 
@@ -351,11 +348,11 @@
             ;; Not joining with the previous line.
             ;; Folding is enabled and we crossed the line count threshold.
             fold-marker-end (str.join [comment-prefix (config.get-in [:log :fold :marker :end])])
-            lines (if (and (not (a.get opts :break?))
+            lines (if (and (not (core.get opts :break?))
                            (not join-first?)
                            (config.get-in [:log :fold :enabled])
-                           (>= (a.count lines) (config.get-in [:log :fold :lines])))
-                    (a.concat
+                           (>= (core.count lines) (config.get-in [:log :fold :lines])))
+                    (core.concat
                       [(str.join [comment-prefix
                                   (config.get-in [:log :fold :marker :start])
                                   " "
@@ -370,34 +367,34 @@
             ;; When the last line in the buffer is a closing fold marker...
             ;; It means join-first? should account for it so it joins _inside_
             ;; the fold block by including the fold end line in the replacement.
-            last-fold? (= fold-marker-end (last-line buf))
+            last-fold? (= fold-marker-end (M.last-line buf))
 
             ;; Insert break comments or join continuing lines if required.
             lines (if
-                    (a.get opts :break?)
-                    (a.concat
+                    (core.get opts :break?)
+                    (core.concat
                       [(break)]
                       (when (client.multiple-states?)
                         [(state-key-header)])
                       lines)
 
                     join-first?
-                    (a.concat
+                    (core.concat
                       (if last-fold?
-                        [(.. (last-line buf -1)
-                             (a.first lines))
+                        [(.. (M.last-line buf -1)
+                             (core.first lines))
                          fold-marker-end]
-                        [(.. (last-line buf) (a.first lines))])
-                      (a.rest lines))
+                        [(.. (M.last-line buf) (core.first lines))])
+                      (core.rest lines))
 
                     lines)
 
-            old-lines (nvim.buf_line_count buf)]
+            old-lines (vim.api.nvim_buf_line_count buf)]
 
         (let [(ok? err)
               (pcall
                 (fn []
-                  (nvim.buf_set_lines
+                  (vim.api.nvim_buf_set_lines
                     buf
                     (if
                       (buffer.empty? buf) 0
@@ -409,97 +406,158 @@
                     -1 false lines)))]
           (when (not ok?)
             (error (.. "Conjure failed to append to log: " err "\n"
-                       "Offending lines: " (a.pr-str lines)))))
+                       "Offending lines: " (core.pr-str lines)))))
 
-        (let [new-lines (nvim.buf_line_count buf)
+        (let [new-lines (vim.api.nvim_buf_line_count buf)
               jump-to-latest? (config.get-in [:log :jump_to_latest :enabled])]
 
           ;; This mark is used when jumping to the latest log entry.
-          (nvim.buf_set_extmark
-            buf state.jump-to-latest.ns
+          (vim.api.nvim_buf_set_extmark
+            buf M.state.jump-to-latest.ns
             (if join-first?
               old-lines
-              (a.inc old-lines)) 0
-            {:id state.jump-to-latest.mark})
+              (core.inc old-lines)) 0
+            {:id M.state.jump-to-latest.mark})
 
           (with-buf-wins
             buf
             (fn [win]
-              (set visible-scrolling-log? (and (not= win state.hud.id)
-                                               (win-visible? win)
-                                               (or jump-to-latest?
-                                                   (>= (win-botline win) old-lines))))
-              (let [[row _] (nvim.win_get_cursor win)]
+              (set visible-scrolling-log?
+                   (and (not= win M.state.hud.id)
+                        (win-visible? win)
+                        (or jump-to-latest?
+                            (>= (win-botline win) old-lines))))
+
+              (set visible-log?
+                   (and (not= win M.state.hud.id)
+                        (win-visible? win)))
+
+              (let [[row _] (vim.api.nvim_win_get_cursor win)]
                 (if jump-to-latest?
-                  (jump-to-latest)
+                  (M.jump-to-latest)
 
                   (= row old-lines)
-                  (nvim.win_set_cursor win [new-lines 0]))))))
+                  (vim.api.nvim_win_set_cursor win [new-lines 0]))))))
 
-        (if (and (not (a.get opts :suppress-hud?))
-                 (not visible-scrolling-log?))
-          (display-hud opts)
-          (close-hud))
+        (let [open-when (config.get-in [:log :hud :open_when])]
+          (if (and (not (core.get opts :suppress-hud?))
 
-        (trim buf)))))
+                   (or (and (= :last-log-line-not-visible open-when)
+                            (not visible-scrolling-log?))
 
-(defn- create-win [cmd]
-  (set state.last-open-cmd cmd)
+                       (and (= :log-win-not-visible open-when)
+                            (not visible-log?))))
+            (display-hud opts)
+            (trim buf)))))))
+
+(fn M.flush []
+  (each [filetype buffer (pairs M.state.buffers)]
+    (let [batched-lines []
+          batched-opts {:clientsuppress-hud? true
+                        :low-priority? true}]
+      (each [_ [lines opts] (ipairs buffer)]
+        (when (not (core.empty? lines))
+          (each [_ line (ipairs lines)]
+            (table.insert batched-lines line)))
+
+        ;; Flush eagerly when we see this.
+        (when (core.get opts :break?)
+          (tset batched-opts :break? true))
+
+        ;; Flush eagerly when we see this.
+        (when (core.get opts :join-first?)
+          (tset batched-opts :join-first? true))
+
+        ;; Only if ALL are true.
+        (when (not (core.get opts :suppress-hud?))
+          (tset batched-opts :suppress-hud? nil))
+
+        ;; Only if ALL are true.
+        (when (not (core.get opts :low-priority?))
+          (tset batched-opts :low-priority? nil)))
+      (when (not (core.empty? batched-lines))
+        (client.with-filetype filetype M.immediate-append batched-lines batched-opts)))
+      (tset M.state.buffers filetype nil)))
+
+(fn M.setup-auto-flush []
+  (timer.interval (config.get-in [:log :auto_flush_interval_ms]) M.flush))
+
+(fn M.append [lines opts]
+  (let [eager? (or (core.get opts :break?) (core.get opts :join-first?))]
+    (when eager?
+      (M.flush))
+
+    (let [{: filetype} (client.current-client-module-name)
+          buffer (or (. M.state.buffers filetype) [])]
+
+      (table.insert buffer [lines opts])
+      (tset M.state.buffers filetype buffer))
+
+    (when eager?
+      (M.flush))))
+
+(fn create-win [cmd]
+  (set M.state.last-open-cmd cmd)
   (let [buf (upsert-buf)]
-    (nvim.command
-      (.. "keepalt "
-          (if (config.get-in [:log :botright])
-            "botright "
-            "")
-          cmd " "
-          (buffer.resolve (log-buf-name))))
-    (nvim.win_set_cursor 0 [(nvim.buf_line_count buf) 0])
+    (vim.cmd (string.format "keepalt %s %s %s" 
+                            (if (config.get-in [:log :botright]) "botright" "")
+                            cmd
+                            (buffer.resolve (log-buf-name))))
+    (vim.api.nvim_win_set_cursor 0 [(vim.api.nvim_buf_line_count buf) 0])
     (set-win-opts! 0)
     (buffer.unlist buf)))
 
-(defn split []
-  (create-win :split))
+(fn M.split []
+  (create-win :split)
+  (let [height (config.get-in [:log :split :height])]
+    (when height
+      (vim.api.nvim_win_set_height 0 (editor.percent-height height)))))
 
-(defn vsplit []
-  (create-win :vsplit))
+(fn M.vsplit []
+  (create-win :vsplit)
+  (let [width (config.get-in [:log :split :width])]
+    (when width
+      (vim.api.nvim_win_set_width 0 (editor.percent-width width)))))
 
-(defn tab []
+(fn M.tab []
   (create-win :tabnew))
 
-(defn buf []
+(fn M.buf []
   (create-win :buf))
 
-(defn- find-windows []
+(fn find-windows []
   (let [buf (upsert-buf)]
-    (a.filter (fn [win] (and (not= state.hud.id win)
-                             (= buf (nvim.win_get_buf win))))
-              (nvim.tabpage_list_wins 0))))
+    (core.filter (fn [win] (and (not= M.state.hud.id win)
+                             (= buf (vim.api.nvim_win_get_buf win))))
+              (vim.api.nvim_tabpage_list_wins 0))))
 
-(defn- close [windows]
-  (a.run! #(nvim.win_close $1 true) windows))
+(fn close [windows]
+  (core.run! #(vim.api.nvim_win_close $1 true) windows))
 
-(defn close-visible []
-  (close-hud)
+(fn M.close-visible []
+  (M.close-hud)
   (close (find-windows)))
 
-(defn toggle []
+(fn M.toggle []
   (let [windows (find-windows)]
-    (if (a.empty? windows)
-      (when (or (= state.last-open-cmd :split)
-                (= state.last-open-cmd :vsplit))
-        (create-win state.last-open-cmd))
-      (close-visible windows))))
+    (if (core.empty? windows)
+      (when (or (= M.state.last-open-cmd :split)
+                (= M.state.last-open-cmd :vsplit))
+        (create-win M.state.last-open-cmd))
+      (M.close-visible windows))))
 
-(defn dbg [desc ...]
+(fn M.dbg [desc ...]
   (when (config.get-in [:debug])
-    (append
-      (a.concat
+    (M.append
+      (core.concat
         [(.. (client.get :comment-prefix) "debug: " desc)]
-        (text.split-lines (a.pr-str ...)))))
+        (text.split-lines (core.pr-str ...)))))
   ...)
 
-(defn reset-soft []
+(fn M.reset-soft []
   (on-new-log-buf (upsert-buf)))
 
-(defn reset-hard []
-  (nvim.ex.bwipeout_ (upsert-buf)))
+(fn M.reset-hard []
+  (vim.api.nvim_buf_delete (upsert-buf) {:force true}))
+
+M

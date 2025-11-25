@@ -11,7 +11,7 @@ Conjure is an interactive environment for evaluating code within your running pr
 The core features of Conjure are language agnostic (although it's targeted at Lisps _for now_), with each language client providing their own extra tools. Here's the currently supported languages, contributions and 3rd party plugins that add clients are highly encouraged! You can find a https://github.com/Olical/conjure/wiki/Client-features[comparison table for all clients and supported features] in the wiki.
 
  * https://clojure.org/[Clojure] over https://nrepl.org/[nREPL] (https://github.com/Olical/conjure/wiki/Quick-start:-Clojure[quickstart])
- * https://fennel-lang.org/[Fennel] inside Neovim via Lua and https://github.com/Olical/aniseed[Aniseed] (https://github.com/Olical/conjure/wiki/Quick-start:-Fennel-(Aniseed)[quickstart])
+ * https://fennel-lang.org/[Fennel] inside Neovim via Lua and https://github.com/Olical/nfnl[nfnl] (https://github.com/Olical/conjure/wiki/Quick-start:-Fennel-(nfnl)[quickstart])
  * https://fennel-lang.org[Fennel] outside of Neovim within any Lua process through an stdio REPL (https://github.com/Olical/conjure/wiki/Quick-start:-Fennel-(stdio)[quickstart])
  * https://janet-lang.org/[Janet] over https://github.com/janet-lang/spork/#networked-repl[spork/netrepl] (https://github.com/Olical/conjure/wiki/Quick-start:-Janet-(netrepl)[quickstart])
  * https://janet-lang.org/[Janet] over stdio (https://github.com/Olical/conjure/wiki/Quick-start:-Janet-(stdio)[quickstart])
@@ -24,6 +24,11 @@ The core features of Conjure are language agnostic (although it's targeted at Li
  * https://www.rust-lang.org/[Rust] over stdio with https://github.com/google/evcxr[evcxr] (https://github.com/Olical/conjure/wiki/Quick-start:-Rust-(evcxr)[quickstart])
  * https://www.lua.org/[Lua] inside Neovim (https://github.com/Olical/conjure/wiki/Quick-start:-Lua-(neovim)[quickstart])
  * https://www.python.org/[Python] over stdio (https://github.com/Olical/conjure/wiki/Quick-start:-Python-(stdio)[quickstart])
+ * https://php.net[PHP] over stdio with https://github.com/bobthecow/psysh[psysh] (https://github.com/bobthecow/psysh/wiki/Usage[usage])
+ * https://www.r-project.org/[R] over stdio.
+ * JavaScript (using https://nodejs.org/[Node.js]) over stdio
+ * https://ccrma.stanford.edu/software/snd/[Snd] / https://ccrma.stanford.edu/software/snd/snd/s7.html[s7] (sound editor scriptable with Scheme) over stdio
+ * https://en.wikipedia.org/wiki/SQL[SQL] (PostgreSQL psql by default) over stdio
 
 You can learn more about the mappings and configuration inside Neovim with `:help conjure`. Each language client also has it's own specific help text under `:help conjure-client-{LANGUAGE}-{TRANSPORT}`, such as `:help conjure-client-clojure-nrepl`, which contains specific mappings and configuration for that client.
 
@@ -66,7 +71,7 @@ This will temporarily download the plugin, launch Neovim with `:ConjureSchool` r
 
 == Installation
 
-Requires Neovim 0.7 or newer.
+Requires Neovim 0.10 or newer.
 
 Alternatively you can use https://github.com/Olical/magic-kit[Magic Kit], an opinionated starter kit that includes all sorts of essential tools.
 
@@ -181,7 +186,7 @@ Broader documentation can be found in the https://github.com/Olical/conjure/wiki
 
 == Behind the curtain
 
-Conjure is written entirely in Lua (no VimL or external processes!) which is compiled from https://fennel-lang.org/[Fennel] by https://github.com/Olical/aniseed[Aniseed] ahead of time. Check out link:CONTRIBUTING.adoc[`CONTRIBUTING.adoc`] for more on how to work on Conjure using itself.
+Conjure is written entirely in Lua (no VimL or external processes!) which is compiled from https://fennel-lang.org/[Fennel] by https://github.com/Olical/nfnl[nfnl] ahead of time. Check out link:CONTRIBUTING.md[`CONTRIBUTING.md`] for more on how to work on Conjure using itself.
 
 Historically, Conjure was Clojure specific with an entirely different implementation, you can still find that version on the https://github.com/Olical/conjure/tree/legacy-jvm[legacy-jvm branch].
 

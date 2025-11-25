@@ -1,19 +1,19 @@
-(module conjure.remote.swank
-  {autoload {a conjure.aniseed.core
-             net conjure.net
-             log conjure.log
-             client conjure.client
-             trn conjure.remote.transport.swank
-             nvim conjure.aniseed.nvim}})
+(local {: autoload : define} (require :conjure.nfnl.module))
+(local core (autoload :conjure.nfnl.core))
+(local client (autoload :conjure.client))
+(local net (autoload :conjure.net))
+(local trn (autoload :conjure.remote.transport.swank))
 
-(defn send [conn msg cb]
+(local M (define :conjure.remote.swank))
+
+(fn M.send [conn msg cb]
   "Send a message to the given connection, call the callback when a response is received."
   ; (log.dbg "send" msg)
   (table.insert conn.queue 1 (or cb false))
   (conn.sock:write (trn.encode msg))
   nil)
 
-(defn connect [opts]
+(fn M.connect [opts]
   "Connects to a remote swank server.
   * opts.host: The host string.
   * opts.port: Port as a string.
@@ -38,7 +38,7 @@
                   (cb msg))))))))
 
   (set conn
-       (a.merge
+       (core.merge
          conn
          (net.connect
            {:host opts.host
@@ -52,6 +52,7 @@
                         (conn.sock:read_start (client.schedule-wrap handle-message))
                         (opts.on-success)))))})))
 
-  ; (send conn (or opts.name "Conjure"))
+  ; (M.send conn (or opts.name "Conjure"))
   conn)
 
+M

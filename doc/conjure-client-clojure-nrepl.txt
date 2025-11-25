@@ -237,7 +237,10 @@ All configuration can be set as described in |conjure-configuration|.
             A fully-qualified symbol naming a var whose function to use for
             printing.
             Must point to a function with signature [value writer options].
-            Default: `"conjure.internal/pprint"`
+            Conjure will create this CIDER pprint function if you aren't using
+            CIDER. The name _must_ be this string to work with babashka.
+            https://github.com/Olical/conjure/issues/406
+            Default: `"cider.nrepl.pprint/pprint"`
 
                             *g:conjure#client#clojure#nrepl#eval#auto_require*
 `g:conjure#client#clojure#nrepl#eval#auto_require`
@@ -310,6 +313,12 @@ All configuration can be set as described in |conjure-configuration|.
             current root form is a test that should be ran.
             Default: `["deftest"]`
 
+                      *g:conjure#client#clojure#nrepl#test#pretty_print_test_failures*
+`g:conjure#client#clojure#nrepl#test#pretty_print_test_failures
+            Pretty print a diff of the test's expected and
+            actual data-structures.
+            Default: `true`
+
                                   *g:conjure#client#clojure#nrepl#test#runner*
 `g:conjure#client#clojure#nrepl#test#runner`
             Test runner to use for the various test mappings. The following
@@ -358,6 +367,21 @@ All configuration can be set as described in |conjure-configuration|.
 `g:conjure#client#clojure#nrepl#mapping#interrupt`
             Interrupt an evaluation.
             Default: `ei`
+
+                       *g:conjure#client#clojure#nrepl#mapping#macro_expand_1*
+`g:conjure#client#clojure#nrepl#mapping#macro_expand_1`
+            Run the current form wrapped in `(macroexpand-1 ...)`
+            Default: `x1`
+
+                         *g:conjure#client#clojure#nrepl#mapping#macro_expand*
+`g:conjure#client#clojure#nrepl#mapping#macro_expand`
+            Run the current form wrapped in `(macroexpand ...)`
+            Default: `xr`
+
+                     *g:conjure#client#clojure#nrepl#mapping#macro_expand_all*
+`g:conjure#client#clojure#nrepl#mapping#macro_expand_all`
+            Run the current form wrapped in `(clojure.walk/macroexpand-all ...)`
+            Default: `xa`
 
                        *g:conjure#client#clojure#nrepl#mapping#last_exception*
 `g:conjure#client#clojure#nrepl#mapping#last_exception`

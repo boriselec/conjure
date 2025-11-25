@@ -1,13 +1,18 @@
-(module conjure.stack
-  {autoload {a conjure.aniseed.core}})
+(local {: autoload : define} (require :conjure.nfnl.module))
+(local core (autoload :conjure.nfnl.core))
 
-(defn push [s v]
+(local M (define :conjure.stack))
+
+(fn M.push [s v]
   (table.insert s v)
   s)
 
-(defn pop [s]
+(fn M.pop [s]
   (table.remove s)
   s)
 
-(defn peek [s]
-  (a.last s))
+(fn M.peek [s]
+  (core.last s))
+
+M
+

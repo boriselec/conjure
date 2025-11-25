@@ -1,43 +1,46 @@
-(module conjure.editor
-  {autoload {a conjure.aniseed.core
-             nvim conjure.aniseed.nvim
-             fs conjure.fs
-             util conjure.util}})
+(local {: autoload : define} (require :conjure.nfnl.module))
+(local core (autoload :conjure.nfnl.core))
+(local fs (autoload :conjure.fs))
+(local util (autoload :conjure.util))
 
-(defn- percent-fn [total-fn]
+(local M (define :conjure.editor))
+
+(fn percent-fn [total-fn]
   (fn [pc]
     (math.floor (* (/ (total-fn) 100) (* pc 100)))))
 
-(defn width []
-  nvim.o.columns)
+(fn M.width []
+  vim.o.columns)
 
-(defn height []
-  nvim.o.lines)
+(fn M.height []
+  vim.o.lines)
 
-(def percent-width (percent-fn width))
-(def percent-height (percent-fn height))
+(set M.percent-width (percent-fn M.width))
+(set M.percent-height (percent-fn M.height))
 
-(defn cursor-left []
-  (nvim.fn.screencol))
+(fn M.cursor-left []
+  (vim.fn.screencol))
 
-(defn cursor-top []
-  (nvim.fn.screenrow))
+(fn M.cursor-top []
+  (vim.fn.screenrow))
 
-(defn go-to [path-or-win line column]
-  (when (a.string? path-or-win)
-    (nvim.ex.edit (fs.localise-path path-or-win)))
+(fn M.go-to [path-or-win line column]
+  (when (core.string? path-or-win)
+    (vim.cmd.edit (fs.localise-path path-or-win)))
 
-  (nvim.win_set_cursor
+  (vim.api.nvim_win_set_cursor
     (if (= :number (type path-or-win))
       path-or-win
       0)
-    [line (a.dec column)]))
+    [line (core.dec column)]))
 
-(defn go-to-mark [m]
-  (nvim.ex.normal_ (.. "`" m)))
+(fn M.go-to-mark [m]
+  (vim.cmd (.. "normal! `" m)))
 
-(defn go-back []
-  (nvim.ex.normal_ (util.replace-termcodes "<c-o>")))
+(fn M.go-back []
+  (vim.cmd (.. "normal! " (util.replace-termcodes "<c-o>"))))
 
-(defn has-filetype? [ft]
-  (a.some #(= ft $1) (nvim.fn.getcompletion ft :filetype)))
+(fn M.has-filetype? [ft]
+  (core.some #(= ft $1) (vim.fn.getcompletion ft :filetype)))
+
+M

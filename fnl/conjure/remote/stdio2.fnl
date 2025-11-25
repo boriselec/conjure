@@ -1,17 +1,18 @@
-(module conjure.remote.stdio2
-  {autoload {a conjure.aniseed.core
-             nvim conjure.aniseed.nvim
-             str conjure.aniseed.string
-             client conjure.client
-             log conjure.log}})
+(local {: autoload} (require :conjure.nfnl.module))
+(local core (autoload :conjure.nfnl.core))
+(local str (autoload :conjure.nfnl.string))
+(local client (autoload :conjure.client))
+(local log (autoload :conjure.log))
 
-(def- uv vim.loop)
+(local uv vim.uv)
 
-(defn parse-cmd [x]
+(fn parse-cmd [x]
   (if
-    (a.table? x)
-    {:cmd (a.first x)
-     :args (a.rest x)}
+    (core.table? x)
+    {:cmd (core.first x)
+     :args (core.rest x)}
 
-    (a.string? x)
+    (core.string? x)
     (parse-cmd (str.split x "%s"))))
+
+{: parse-cmd}

@@ -1,210 +1,197 @@
-local _2afile_2a = "fnl/conjure/mapping.fnl"
-local _2amodule_name_2a = "conjure.mapping"
-local _2amodule_2a
-do
-  package.loaded[_2amodule_name_2a] = {}
-  _2amodule_2a = package.loaded[_2amodule_name_2a]
-end
-local _2amodule_locals_2a
-do
-  _2amodule_2a["aniseed/locals"] = {}
-  _2amodule_locals_2a = (_2amodule_2a)["aniseed/locals"]
-end
-local autoload = (require("conjure.aniseed.autoload")).autoload
-local a, bridge, client, config, eval, extract, log, nvim, school, str, util, _ = autoload("conjure.aniseed.core"), autoload("conjure.bridge"), autoload("conjure.client"), autoload("conjure.config"), autoload("conjure.eval"), autoload("conjure.extract"), autoload("conjure.log"), autoload("conjure.aniseed.nvim"), autoload("conjure.school"), autoload("conjure.aniseed.string"), autoload("conjure.util"), nil
-_2amodule_locals_2a["a"] = a
-_2amodule_locals_2a["bridge"] = bridge
-_2amodule_locals_2a["client"] = client
-_2amodule_locals_2a["config"] = config
-_2amodule_locals_2a["eval"] = eval
-_2amodule_locals_2a["extract"] = extract
-_2amodule_locals_2a["log"] = log
-_2amodule_locals_2a["nvim"] = nvim
-_2amodule_locals_2a["school"] = school
-_2amodule_locals_2a["str"] = str
-_2amodule_locals_2a["util"] = util
-_2amodule_locals_2a["_"] = _
+-- [nfnl] fnl/conjure/mapping.fnl
+local _local_1_ = require("conjure.nfnl.module")
+local autoload = _local_1_.autoload
+local define = _local_1_.define
+local core = autoload("conjure.nfnl.core")
+local str = autoload("conjure.nfnl.string")
+local config = autoload("conjure.config")
+local log = autoload("conjure.log")
+local client = autoload("conjure.client")
+local eval = autoload("conjure.eval")
+local inline = autoload("conjure.inline")
+local school = autoload("conjure.school")
+local util = autoload("conjure.util")
+local vim = _G.vim
+local M = define("conjure.mapping", {})
 local function cfg(k)
   return config["get-in"]({"mapping", k})
 end
-_2amodule_locals_2a["cfg"] = cfg
-local function vim_repeat(mapping)
-  return ("repeat#set(\"" .. nvim.fn.escape(mapping, "\"") .. "\", 1)")
-end
-_2amodule_locals_2a["vim-repeat"] = vim_repeat
-local function buf(name_suffix, mapping_suffix, handler_fn, opts)
+M.buf = function(name_suffix, mapping_suffix, handler_fn, opts)
   if mapping_suffix then
     local mapping
-    if a["string?"](mapping_suffix) then
+    if core["string?"](mapping_suffix) then
       mapping = (cfg("prefix") .. mapping_suffix)
     else
-      mapping = a.first(mapping_suffix)
+      mapping = core.first(mapping_suffix)
     end
     local cmd = ("Conjure" .. name_suffix)
-    local desc = (a.get(opts, "desc") or ("Executes the " .. cmd .. " command"))
-    local mode = a.get(opts, "mode", "n")
-    nvim.create_user_command(cmd, handler_fn, a["merge!"]({force = true, desc = desc}, a.get(opts, "command-opts", {})))
-    local function _2_()
-      if (false ~= a.get(opts, "repeat?")) then
-        pcall(nvim.fn["repeat#set"], util["replace-termcodes"](mapping), 1)
+    local desc = (core.get(opts, "desc") or ("Executes the " .. cmd .. " command"))
+    local mode = core.get(opts, "mode", "n")
+    vim.api.nvim_buf_create_user_command(core.get(opts, "buf", 0), cmd, handler_fn, core["merge!"]({force = true, desc = desc}, core.get(opts, "command-opts", {})))
+    local function _3_()
+      if (false ~= core.get(opts, "repeat?")) then
+        pcall(vim.fn["repeat#set"], util["replace-termcodes"](mapping), 1)
       else
       end
-      local _4_
+      local _5_
       if ("n" == mode) then
-        _4_ = util["replace-termcodes"]("<cmd>")
+        _5_ = util["replace-termcodes"]("<cmd>")
       else
-        _4_ = ":"
+        _5_ = ":"
       end
-      return nvim.ex.normal_(str.join({_4_, cmd, util["replace-termcodes"]("<cr>")}))
+      return vim.api.nvim_command(str.join({"normal! ", _5_, cmd, util["replace-termcodes"]("<cr>")}))
     end
-    return nvim.buf_set_keymap(a.get(opts, "buf", 0), mode, mapping, "", a["merge!"]({silent = true, noremap = true, desc = desc, callback = _2_}, a.get(opts, "mapping-opts", {})))
+    return vim.api.nvim_buf_set_keymap(core.get(opts, "buf", 0), mode, mapping, "", core["merge!"]({silent = true, noremap = true, desc = desc, callback = _3_}, core.get(opts, "mapping-opts", {})))
   else
     return nil
   end
 end
-_2amodule_2a["buf"] = buf
-local function on_filetype()
-  buf("LogSplit", cfg("log_split"), util["wrap-require-fn-call"]("conjure.log", "split"), {desc = "Open log in new horizontal split window"})
-  buf("LogVSplit", cfg("log_vsplit"), util["wrap-require-fn-call"]("conjure.log", "vsplit"), {desc = "Open log in new vertical split window"})
-  buf("LogTab", cfg("log_tab"), util["wrap-require-fn-call"]("conjure.log", "tab"), {desc = "Open log in new tab"})
-  buf("LogBuf", cfg("log_buf"), util["wrap-require-fn-call"]("conjure.log", "buf"), {desc = "Open log in new buffer"})
-  buf("LogToggle", cfg("log_toggle"), util["wrap-require-fn-call"]("conjure.log", "toggle"), {desc = "Toggle log buffer"})
-  buf("LogCloseVisible", cfg("log_close_visible"), util["wrap-require-fn-call"]("conjure.log", "close-visible"), {desc = "Close all visible log windows"})
-  buf("LogResetSoft", cfg("log_reset_soft"), util["wrap-require-fn-call"]("conjure.log", "reset-soft"), {desc = "Soft reset log"})
-  buf("LogResetHard", cfg("log_reset_hard"), util["wrap-require-fn-call"]("conjure.log", "reset-hard"), {desc = "Hard reset log"})
-  buf("LogJumpToLatest", cfg("log_jump_to_latest"), util["wrap-require-fn-call"]("conjure.log", "jump-to-latest"), {desc = "Jump to latest part of log"})
-  local function _7_()
-    nvim.o.opfunc = "ConjureEvalMotionOpFunc"
-    local function _8_()
-      return nvim.feedkeys("g@", "m", false)
+M["on-filetype"] = function()
+  M.buf("LogSplit", cfg("log_split"), util["wrap-require-fn-call"]("conjure.log", "split"), {desc = "Open log in new horizontal split window"})
+  M.buf("LogVSplit", cfg("log_vsplit"), util["wrap-require-fn-call"]("conjure.log", "vsplit"), {desc = "Open log in new vertical split window"})
+  M.buf("LogTab", cfg("log_tab"), util["wrap-require-fn-call"]("conjure.log", "tab"), {desc = "Open log in new tab"})
+  M.buf("LogBuf", cfg("log_buf"), util["wrap-require-fn-call"]("conjure.log", "buf"), {desc = "Open log in new buffer"})
+  M.buf("LogToggle", cfg("log_toggle"), util["wrap-require-fn-call"]("conjure.log", "toggle"), {desc = "Toggle log buffer"})
+  M.buf("LogCloseVisible", cfg("log_close_visible"), util["wrap-require-fn-call"]("conjure.log", "close-visible"), {desc = "Close all visible log windows"})
+  M.buf("LogResetSoft", cfg("log_reset_soft"), util["wrap-require-fn-call"]("conjure.log", "reset-soft"), {desc = "Soft reset log"})
+  M.buf("LogResetHard", cfg("log_reset_hard"), util["wrap-require-fn-call"]("conjure.log", "reset-hard"), {desc = "Hard reset log"})
+  M.buf("LogJumpToLatest", cfg("log_jump_to_latest"), util["wrap-require-fn-call"]("conjure.log", "jump-to-latest"), {desc = "Jump to latest part of log"})
+  local function _8_()
+    local function _9_(...)
+      return eval.selection(...)
     end
-    return client.schedule(_8_)
+    _G._conjure_opfunc = _9_
+    vim.o.opfunc = "v:lua._conjure_opfunc"
+    local function _10_()
+      return vim.api.nvim_feedkeys("g@", "m", false)
+    end
+    return client.schedule(_10_)
   end
-  buf("EvalMotion", cfg("eval_motion"), _7_, {desc = "Evaluate motion"})
-  buf("EvalCurrentForm", cfg("eval_current_form"), util["wrap-require-fn-call"]("conjure.eval", "current-form"), {desc = "Evaluate current form"})
-  buf("EvalCommentCurrentForm", cfg("eval_comment_current_form"), util["wrap-require-fn-call"]("conjure.eval", "comment-current-form"), {desc = "Evaluate current form and comment result"})
-  buf("EvalRootForm", cfg("eval_root_form"), util["wrap-require-fn-call"]("conjure.eval", "root-form"), {desc = "Evaluate root form"})
-  buf("EvalCommentRootForm", cfg("eval_comment_root_form"), util["wrap-require-fn-call"]("conjure.eval", "comment-root-form"), {desc = "Evaluate root form and comment result"})
-  buf("EvalWord", cfg("eval_word"), util["wrap-require-fn-call"]("conjure.eval", "word"), {desc = "Evaluate word"})
-  buf("EvalCommentWord", cfg("eval_comment_word"), util["wrap-require-fn-call"]("conjure.eval", "comment-word"), {desc = "Evaluate word and comment result"})
-  buf("EvalReplaceForm", cfg("eval_replace_form"), util["wrap-require-fn-call"]("conjure.eval", "replace-form"), {desc = "Evaluate form and replace with result"})
-  local function _9_()
+  M.buf("EvalMotion", cfg("eval_motion"), _8_, {desc = "Evaluate motion"})
+  M.buf("EvalCurrentForm", cfg("eval_current_form"), util["wrap-require-fn-call"]("conjure.eval", "current-form"), {desc = "Evaluate current form"})
+  M.buf("EvalCommentCurrentForm", cfg("eval_comment_current_form"), util["wrap-require-fn-call"]("conjure.eval", "comment-current-form"), {desc = "Evaluate current form and comment result"})
+  M.buf("EvalRootForm", cfg("eval_root_form"), util["wrap-require-fn-call"]("conjure.eval", "root-form"), {desc = "Evaluate root form"})
+  M.buf("EvalCommentRootForm", cfg("eval_comment_root_form"), util["wrap-require-fn-call"]("conjure.eval", "comment-root-form"), {desc = "Evaluate root form and comment result"})
+  M.buf("EvalWord", cfg("eval_word"), util["wrap-require-fn-call"]("conjure.eval", "word"), {desc = "Evaluate word"})
+  M.buf("EvalCommentWord", cfg("eval_comment_word"), util["wrap-require-fn-call"]("conjure.eval", "comment-word"), {desc = "Evaluate word and comment result"})
+  M.buf("EvalReplaceForm", cfg("eval_replace_form"), util["wrap-require-fn-call"]("conjure.eval", "replace-form"), {desc = "Evaluate form and replace with result"})
+  local function _11_()
     return client.schedule(eval["marked-form"])
   end
-  buf("EvalMarkedForm", cfg("eval_marked_form"), _9_, {desc = "Evaluate marked form", ["repeat?"] = false})
-  buf("EvalFile", cfg("eval_file"), util["wrap-require-fn-call"]("conjure.eval", "file"), {desc = "Evaluate file"})
-  buf("EvalBuf", cfg("eval_buf"), util["wrap-require-fn-call"]("conjure.eval", "buf"), {desc = "Evaluate buffer"})
-  buf("EvalPrevious", cfg("eval_previous"), util["wrap-require-fn-call"]("conjure.eval", "previous"), {desc = "Evaluate previous evaluation"})
-  buf("EvalVisual", cfg("eval_visual"), util["wrap-require-fn-call"]("conjure.eval", "selection"), {desc = "Evaluate visual select", mode = "v", ["command-opts"] = {range = true}})
-  buf("DocWord", cfg("doc_word"), util["wrap-require-fn-call"]("conjure.eval", "doc-word"), {desc = "Get documentation under cursor"})
-  buf("DefWord", cfg("def_word"), util["wrap-require-fn-call"]("conjure.eval", "def-word"), {desc = "Get definition under cursor"})
-  do
+  M.buf("EvalMarkedForm", cfg("eval_marked_form"), _11_, {desc = "Evaluate marked form", ["repeat?"] = false})
+  M.buf("EvalFile", cfg("eval_file"), util["wrap-require-fn-call"]("conjure.eval", "file"), {desc = "Evaluate file"})
+  M.buf("EvalBuf", cfg("eval_buf"), util["wrap-require-fn-call"]("conjure.eval", "buf"), {desc = "Evaluate buffer"})
+  M.buf("EvalPrevious", cfg("eval_previous"), util["wrap-require-fn-call"]("conjure.eval", "previous"), {desc = "Evaluate previous evaluation"})
+  M.buf("EvalVisual", cfg("eval_visual"), util["wrap-require-fn-call"]("conjure.eval", "selection"), {desc = "Evaluate visual select", mode = "v", ["command-opts"] = {range = true}})
+  M.buf("DocWord", cfg("doc_word"), util["wrap-require-fn-call"]("conjure.eval", "doc-word"), {desc = "Get documentation under cursor"})
+  M.buf("DefWord", cfg("def_word"), util["wrap-require-fn-call"]("conjure.eval", "def-word"), {desc = "Get definition under cursor"})
+  if ("function" == type(client.get("completions"))) then
     local fn_name = config["get-in"]({"completion", "omnifunc"})
     if fn_name then
-      nvim.ex.setlocal(("omnifunc=" .. fn_name))
-    else
-    end
-  end
-  return client["optional-call"]("on-filetype")
-end
-_2amodule_2a["on-filetype"] = on_filetype
-local function on_exit()
-  local function _11_()
-    return client["optional-call"]("on-exit")
-  end
-  return client["each-loaded-client"](_11_)
-end
-_2amodule_2a["on-exit"] = on_exit
-local function on_quit()
-  return log["close-hud"]()
-end
-_2amodule_2a["on-quit"] = on_quit
-local function init(filetypes)
-  nvim.ex.augroup("conjure_init_filetypes")
-  nvim.ex.autocmd_()
-  if (true == config["get-in"]({"mapping", "enable_ft_mappings"})) then
-    nvim.ex.autocmd("FileType", str.join(",", filetypes), bridge["viml->lua"]("conjure.mapping", "on-filetype", {}))
-    local function _12_(_241)
-      return (_241 == nvim.bo.filetype)
-    end
-    if a.some(_12_, filetypes) then
-      vim.schedule(on_filetype)
+      local function _12_(find_start, base)
+        return M.omnifunc((find_start == 1), base)
+      end
+      _G._conjure_omnifunc = _12_
+      vim.bo.omnifunc = "v:lua._conjure_omnifunc"
     else
     end
   else
   end
-  nvim.ex.autocmd("CursorMoved", "*", bridge["viml->lua"]("conjure.log", "close-hud-passive", {}))
-  nvim.ex.autocmd("CursorMovedI", "*", bridge["viml->lua"]("conjure.log", "close-hud-passive", {}))
-  nvim.ex.autocmd("CursorMoved", "*", bridge["viml->lua"]("conjure.inline", "clear", {}))
-  nvim.ex.autocmd("CursorMovedI", "*", bridge["viml->lua"]("conjure.inline", "clear", {}))
-  nvim.ex.autocmd("VimLeavePre", "*", bridge["viml->lua"]("conjure.log", "clear-close-hud-passive-timer", {}))
-  nvim.ex.autocmd("VimLeavePre", "*", ("lua require('" .. _2amodule_name_2a .. "')['" .. "on-exit" .. "']()"))
-  nvim.ex.autocmd("QuitPre", "*", ("lua require('" .. _2amodule_name_2a .. "')['" .. "on-quit" .. "']()"))
-  return nvim.ex.augroup("END")
+  return client["optional-call"]("on-filetype")
 end
-_2amodule_2a["init"] = init
-local function eval_ranged_command(start, _end, code)
+M["on-exit"] = function()
+  local function _15_()
+    return client["optional-call"]("on-exit")
+  end
+  return client["each-loaded-client"](_15_)
+end
+M["on-quit"] = function()
+  return log["close-hud"]()
+end
+local function autocmd_callback(f)
+  local function _16_(ev)
+    f(ev)
+    return nil
+  end
+  return _16_
+end
+M.init = function(filetypes)
+  local group = vim.api.nvim_create_augroup("conjure_init_filetypes", {})
+  if (true == config["get-in"]({"mapping", "enable_ft_mappings"})) then
+    vim.api.nvim_create_autocmd("FileType", {group = group, pattern = filetypes, callback = autocmd_callback(M["on-filetype"])})
+    local function _17_(_241)
+      return (_241 == vim.bo.filetype)
+    end
+    if core.some(_17_, filetypes) then
+      vim.schedule(M["on-filetype"])
+    else
+    end
+  else
+  end
+  vim.api.nvim_create_autocmd("CursorMoved", {group = group, pattern = "*", callback = autocmd_callback(log["close-hud-passive"])})
+  vim.api.nvim_create_autocmd("CursorMovedI", {group = group, pattern = "*", callback = autocmd_callback(log["close-hud-passive"])})
+  vim.api.nvim_create_autocmd("CursorMoved", {group = group, pattern = "*", callback = autocmd_callback(inline.clear)})
+  vim.api.nvim_create_autocmd("CursorMovedI", {group = group, pattern = "*", callback = autocmd_callback(inline.clear)})
+  vim.api.nvim_create_autocmd("VimLeavePre", {group = group, pattern = "*", callback = autocmd_callback(log["clear-close-hud-passive-timer"])})
+  vim.api.nvim_create_autocmd("VimLeavePre", {group = group, pattern = "*", callback = autocmd_callback(M["on-exit"])})
+  return vim.api.nvim_create_autocmd("QuitPre", {group = group, pattern = "*", callback = autocmd_callback(M["on-quit"])})
+end
+M["eval-ranged-command"] = function(start, _end, code)
   if ("" == code) then
-    return eval.range(a.dec(start), _end)
+    return eval.range(core.dec(start), _end)
   else
     return eval.command(code)
   end
 end
-_2amodule_2a["eval-ranged-command"] = eval_ranged_command
-local function connect_command(...)
+M["connect-command"] = function(...)
   local args = {...}
-  local function _17_(...)
-    if (1 == a.count(args)) then
-      local host, port = string.match(a.first(args), "([a-zA-Z%d\\.-]+):(%d+)$")
+  local function _22_(...)
+    if (1 == core.count(args)) then
+      local host, port = string.match(core.first(args), "([a-zA-Z%d\\.-]+):(%d+)$")
       if (host and port) then
         return {host = host, port = port}
       else
-        return {port = a.first(args)}
+        return {port = core.first(args)}
       end
     else
-      return {host = a.first(args), port = a.second(args)}
+      return {host = core.first(args), port = core.second(args)}
     end
   end
-  return client.call("connect", _17_(...))
+  return client.call("connect", _22_(...))
 end
-_2amodule_2a["connect-command"] = connect_command
-local function client_state_command(state_key)
-  if a["empty?"](state_key) then
-    return a.println(client["state-key"]())
+M["client-state-command"] = function(state_key)
+  if core["empty?"](state_key) then
+    return core.println(client["state-key"]())
   else
     return client["set-state-key!"](state_key)
   end
 end
-_2amodule_2a["client-state-command"] = client_state_command
-local function omnifunc(find_start_3f, base)
+M.omnifunc = function(find_start_3f, base)
   if find_start_3f then
-    local _let_19_ = nvim.win_get_cursor(0)
-    local row = _let_19_[1]
-    local col = _let_19_[2]
-    local _let_20_ = nvim.buf_get_lines(0, a.dec(row), row, false)
-    local line = _let_20_[1]
-    return (col - a.count(nvim.fn.matchstr(string.sub(line, 1, col), "\\k\\+$")))
+    local _let_24_ = vim.api.nvim_win_get_cursor(0)
+    local row = _let_24_[1]
+    local col = _let_24_[2]
+    local _let_25_ = vim.api.nvim_buf_get_lines(0, core.dec(row), row, false)
+    local line = _let_25_[1]
+    return (col - core.count(vim.fn.matchstr(string.sub(line, 1, col), "\\k\\+$")))
   else
     return eval["completions-sync"](base)
   end
 end
-_2amodule_2a["omnifunc"] = omnifunc
-nvim.ex.function_(str.join("\n", {"ConjureEvalMotionOpFunc(kind)", "call luaeval(\"require('conjure.eval')['selection'](_A)\", a:kind)", "endfunction"}))
-nvim.ex.function_(str.join("\n", {"ConjureOmnifunc(findstart, base)", "return luaeval(\"require('conjure.mapping')['omnifunc'](_A[1] == 1, _A[2])\", [a:findstart, a:base])", "endfunction"}))
-local function _22_(_241)
-  return eval_ranged_command((_241).line1, (_241).line2, (_241).args)
+local function _27_(_241)
+  return M["eval-ranged-command"](_241.line1, _241.line2, _241.args)
 end
-nvim.create_user_command("ConjureEval", _22_, {nargs = "?", range = true})
-local function _23_(_241)
-  return connect_command(unpack((_241).fargs))
+vim.api.nvim_create_user_command("ConjureEval", _27_, {nargs = "?", range = true})
+local function _28_(_241)
+  return M["connect-command"](unpack(_241.fargs))
 end
-nvim.create_user_command("ConjureConnect", _23_, {nargs = "*", range = true, complete = "file"})
-local function _24_(_241)
-  return client_state_command((_241).args)
+vim.api.nvim_create_user_command("ConjureConnect", _28_, {nargs = "*", range = true, complete = "file"})
+local function _29_(_241)
+  return M["client-state-command"](_241.args)
 end
-nvim.create_user_command("ConjureClientState", _24_, {nargs = "?"})
-local function _25_()
+vim.api.nvim_create_user_command("ConjureClientState", _29_, {nargs = "?"})
+local function _30_()
   return school.start()
 end
-nvim.create_user_command("ConjureSchool", _25_, {})
-return _2amodule_2a
+vim.api.nvim_create_user_command("ConjureSchool", _30_, {})
+return M

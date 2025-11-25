@@ -1,34 +1,34 @@
-(module conjure.net
-  {autoload {a conjure.aniseed.core
-             nvim conjure.aniseed.nvim
-             bridge conjure.bridge}
-   require-macros [conjure.macros]})
+(local {: autoload : define} (require :conjure.nfnl.module))
+(local core (autoload :conjure.nfnl.core))
 
-(defn resolve [host]
+(import-macros {: augroup : autocmd} :conjure.macros)
+
+(local M (define :conjure.net {}))
+
+(fn M.resolve [host]
   ;; Mostly to work around jeejah binding to localhost instead of 127.0.0.1 and
   ;; libuv net requiring IP addresses.
   (if (= host "::")
     host
     (-> host
-        (->> (vim.loop.getaddrinfo)
-             (a.filter #(= "inet" (a.get $1 :family)))
-             (a.first))
-        (a.get :addr))))
+        (->> (vim.uv.getaddrinfo)
+             (core.filter #(= "inet" (core.get $1 :family)))
+             (core.first))
+        (core.get :addr))))
 
-(defonce- state
-  {:sock-drawer []})
+(local state {:sock-drawer []})
 
-(defn- destroy-sock [sock]
+(fn destroy-sock [sock]
   (when (not (sock:is_closing))
     (sock:read_stop)
     (sock:shutdown)
     (sock:close))
 
-  (set state.sock-drawer (a.filter #(not= sock $1) state.sock-drawer)))
+  (set state.sock-drawer (core.filter #(not= sock $1) state.sock-drawer)))
 
-(defn connect [{:  host : port : cb}]
-  (let [sock (vim.loop.new_tcp)
-        resolved-host (resolve host)]
+(fn M.connect [{:  host : port : cb}]
+  (let [sock (vim.uv.new_tcp)
+        resolved-host (M.resolve host)]
 
     (when (not resolved-host)
       (error "Failed to resolve host for Conjure connection"))
@@ -41,9 +41,14 @@
      :host host
      :port port}))
 
-(defn destroy-all-socks []
-  (a.run! destroy-sock state.sock-drawer))
+(fn destroy-all-socks []
+  (core.run! destroy-sock state.sock-drawer))
 
-(augroup
-  conjure-net-sock-cleanup
-  (autocmd :VimLeavePre :* (viml->fn :destroy-all-socks)))
+(local group (vim.api.nvim_create_augroup "conjure-net-sock-cleanup" {}))
+(vim.api.nvim_create_autocmd
+  :VimLeavePre
+  {: group
+   :pattern "*"
+   :callback destroy-all-socks})
+
+M

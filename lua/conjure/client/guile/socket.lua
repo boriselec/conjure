@@ -1,76 +1,78 @@
-local _2afile_2a = "fnl/conjure/client/guile/socket.fnl"
-local _2amodule_name_2a = "conjure.client.guile.socket"
-local _2amodule_2a
-do
-  package.loaded[_2amodule_name_2a] = {}
-  _2amodule_2a = package.loaded[_2amodule_name_2a]
-end
-local _2amodule_locals_2a
-do
-  _2amodule_2a["aniseed/locals"] = {}
-  _2amodule_locals_2a = (_2amodule_2a)["aniseed/locals"]
-end
-local autoload = (require("conjure.aniseed.autoload")).autoload
-local a, client, config, extract, log, mapping, nvim, socket, str, text, ts, _ = autoload("conjure.aniseed.core"), autoload("conjure.client"), autoload("conjure.config"), autoload("conjure.extract"), autoload("conjure.log"), autoload("conjure.mapping"), autoload("conjure.aniseed.nvim"), autoload("conjure.remote.socket"), autoload("conjure.aniseed.string"), autoload("conjure.text"), autoload("conjure.tree-sitter"), nil
-_2amodule_locals_2a["a"] = a
-_2amodule_locals_2a["client"] = client
-_2amodule_locals_2a["config"] = config
-_2amodule_locals_2a["extract"] = extract
-_2amodule_locals_2a["log"] = log
-_2amodule_locals_2a["mapping"] = mapping
-_2amodule_locals_2a["nvim"] = nvim
-_2amodule_locals_2a["socket"] = socket
-_2amodule_locals_2a["str"] = str
-_2amodule_locals_2a["text"] = text
-_2amodule_locals_2a["ts"] = ts
-_2amodule_locals_2a["_"] = _
-config.merge({client = {guile = {socket = {pipename = nil}}}})
+-- [nfnl] fnl/conjure/client/guile/socket.fnl
+local _local_1_ = require("conjure.nfnl.module")
+local autoload = _local_1_.autoload
+local define = _local_1_.define
+local a = autoload("conjure.nfnl.core")
+local client = autoload("conjure.client")
+local config = autoload("conjure.config")
+local log = autoload("conjure.log")
+local mapping = autoload("conjure.mapping")
+local socket = autoload("conjure.remote.socket")
+local str = autoload("conjure.nfnl.string")
+local text = autoload("conjure.text")
+local ts = autoload("conjure.tree-sitter")
+local cmpl = autoload("conjure.client.guile.completions")
+local util = autoload("conjure.util")
+local M = define("conjure.client.guile.socket")
+config.merge({client = {guile = {socket = {pipename = nil, host_port = nil, enable_completions = true}}}})
 if config["get-in"]({"mapping", "enable_defaults"}) then
   config.merge({client = {guile = {socket = {mapping = {connect = "cc", disconnect = "cd"}}}}})
 else
 end
 local cfg = config["get-in-fn"]({"client", "guile", "socket"})
-do end (_2amodule_locals_2a)["cfg"] = cfg
 local state
-local function _2_()
-  return {repl = nil}
+local function _3_()
+  return {repl = nil, ["known-contexts"] = {}}
 end
-state = ((_2amodule_2a).state or client["new-state"](_2_))
-do end (_2amodule_locals_2a)["state"] = state
-local buf_suffix = ".scm"
-_2amodule_2a["buf-suffix"] = buf_suffix
-local comment_prefix = "; "
-_2amodule_2a["comment-prefix"] = comment_prefix
-local context_pattern = "%(define%-module%s+(%([%g%s]-%))"
-_2amodule_2a["context-pattern"] = context_pattern
-local form_node_3f = ts["node-surrounded-by-form-pair-chars?"]
-_2amodule_2a["form-node?"] = form_node_3f
-local function with_repl_or_warn(f, opts)
+state = client["new-state"](_3_)
+M["buf-suffix"] = ".scm"
+M["comment-prefix"] = "; "
+local base_module = "(guile)"
+local default_context = "(guile-user)"
+M["valid-str?"] = function(code)
+  return ts["valid-str?"]("scheme", code)
+end
+local function normalize_context(arg)
+  local tokens = str.split(arg, "%s+")
+  local context = ("(" .. str.join(" ", tokens) .. ")")
+  return context
+end
+local function strip_comments(f)
+  return string.gsub(f, ";.-\n", "")
+end
+M.context = function(f)
+  local stripped = strip_comments((f .. "\n"))
+  local define_args = string.match(stripped, "%(define%-module%s+%(%s*([%g%s]-)%s*%)")
+  if define_args then
+    return normalize_context(define_args)
+  else
+    return nil
+  end
+end
+M["form-node?"] = ts["node-surrounded-by-form-pair-chars?"]
+local function with_repl_or_warn(f, _opts)
   local repl = state("repl")
   if (repl and ("connected" == repl.status)) then
     return f(repl)
   else
-    return log.append({(comment_prefix .. "No REPL running")})
+    return log.append({(M["comment-prefix"] .. "No REPL running")})
   end
 end
-_2amodule_locals_2a["with-repl-or-warn"] = with_repl_or_warn
 local function format_message(msg)
   if msg.out then
     return text["split-lines"](msg.out)
   elseif msg.err then
-    return text["prefixed-lines"](string.gsub(msg.err, "%s*Entering a new prompt%. .*]>%s*", ""), comment_prefix)
+    return text["prefixed-lines"](string.gsub(msg.err, "%s*Entering a new prompt%. .*]>%s*", ""), M["comment-prefix"])
   else
-    return {(comment_prefix .. "Empty result")}
+    return {(M["comment-prefix"] .. "Empty result")}
   end
 end
-_2amodule_locals_2a["format-message"] = format_message
 local function display_result(msg)
-  local function _5_(_241)
+  local function _7_(_241)
     return ("" ~= _241)
   end
-  return log.append(a.filter(_5_, format_message(msg)))
+  return log.append(a.filter(_7_, format_message(msg)))
 end
-_2amodule_locals_2a["display-result"] = display_result
 local function clean_input_code(code)
   local clean = str.trim(code)
   if not str["blank?"](clean) then
@@ -79,137 +81,270 @@ local function clean_input_code(code)
     return nil
   end
 end
-_2amodule_locals_2a["clean-input-code"] = clean_input_code
-local function eval_str(opts)
-  local function _7_(repl)
-    local _8_ = (",m " .. (opts.context or "(guile-user)") .. "\n" .. opts.code)
-    if (nil ~= _8_) then
-      local _9_ = clean_input_code(_8_)
-      if (nil ~= _9_) then
-        local function _10_(msgs)
-          if ((1 == a.count(msgs)) and ("" == a["get-in"](msgs, {1, "out"}))) then
-            a["assoc-in"](msgs, {1, "out"}, (comment_prefix .. "Empty result"))
-          else
+local function completions_enabled_3f()
+  return cfg({"enable_completions"})
+end
+local function build_switch_module_command(context)
+  return (",m " .. context)
+end
+local function init_module(repl, context)
+  log.dbg(("Initializing module for context " .. context))
+  local function _9_(_)
+  end
+  repl.send((build_switch_module_command(context) .. "\n,import " .. base_module), _9_)
+  if completions_enabled_3f() then
+    local function _10_(_)
+    end
+    return repl.send(cmpl["guile-repl-completion-code"], _10_)
+  else
+    return nil
+  end
+end
+local function ensure_module_initialized(repl, context)
+  if not a["get-in"](state(), {"known-contexts", context}) then
+    init_module(repl, context)
+    return a["assoc-in"](state(), {"known-contexts", context}, true)
+  else
+    return nil
+  end
+end
+M["eval-str"] = function(opts)
+  local function _13_(repl)
+    if M["valid-str?"](opts.code) then
+      local context = (opts.context or default_context)
+      ensure_module_initialized(repl, context)
+      local tmp_3_ = (build_switch_module_command(context) .. "\n" .. opts.code)
+      if (nil ~= tmp_3_) then
+        local tmp_3_0 = clean_input_code(tmp_3_)
+        if (nil ~= tmp_3_0) then
+          local function _14_(msgs)
+            if ((1 == a.count(msgs)) and ("" == a["get-in"](msgs, {1, "out"}))) then
+              a["assoc-in"](msgs, {1, "out"}, (M["comment-prefix"] .. "Empty result"))
+            else
+            end
+            if opts["on-result"] then
+              opts["on-result"](str.join("\n", format_message(a.last(msgs))))
+            else
+            end
+            if not opts["passive?"] then
+              return a["run!"](display_result, msgs)
+            else
+              return nil
+            end
           end
-          if opts["on-result"] then
-            opts["on-result"](str.join("\n", format_message(a.last(msgs))))
-          else
-          end
-          return a["run!"](display_result, msgs)
+          return repl.send(tmp_3_0, _14_, {["batch?"] = true})
+        else
+          return nil
         end
-        return repl.send(_9_, _10_, {["batch?"] = true})
       else
-        return _9_
+        return nil
       end
     else
-      return _8_
+      return log.append({(M["comment-prefix"] .. "eval error: could not parse form")})
     end
   end
-  return with_repl_or_warn(_7_)
+  return with_repl_or_warn(_13_)
 end
-_2amodule_2a["eval-str"] = eval_str
-local function eval_file(opts)
-  return eval_str(a.assoc(opts, "code", ("(load \"" .. opts["file-path"] .. "\")")))
+M["eval-file"] = function(opts)
+  return M["eval-str"](a.assoc(opts, "code", ("(load \"" .. opts["file-path"] .. "\")")))
 end
-_2amodule_2a["eval-file"] = eval_file
-local function doc_str(opts)
-  local function _15_(_241)
-    return ("(procedure-documentation " .. _241 .. ")")
+M["doc-str"] = function(opts)
+  local function _21_(_241)
+    return (",d " .. _241)
   end
-  return eval_str(a.update(opts, "code", _15_))
+  return M["eval-str"](a.update(opts, "code", _21_))
 end
-_2amodule_2a["doc-str"] = doc_str
 local function display_repl_status()
   local repl = state("repl")
+  log.dbg(a.str("client.guile.socket: repl=", repl))
   if repl then
-    local function _16_()
+    local _22_
+    do
       local pipename = a["get-in"](repl, {"opts", "pipename"})
+      local host_port = a["get-in"](repl, {"opts", "host_port"})
       if pipename then
-        return (pipename .. " ")
+        _22_ = (pipename .. " ")
+      elseif host_port then
+        _22_ = (host_port .. " ")
       else
-        return ""
+        _22_ = "no pipename & no host-port"
       end
     end
-    local function _18_()
+    local _24_
+    do
       local err = a.get(repl, "err")
       if err then
-        return (" " .. err)
+        _24_ = (" " .. err)
       else
-        return ""
+        _24_ = ""
       end
     end
-    return log.append({(comment_prefix .. _16_() .. "(" .. repl.status .. _18_() .. ")")}, {["break?"] = true})
+    return log.append({(M["comment-prefix"] .. _22_ .. "(" .. repl.status .. _24_ .. ")")}, {["break?"] = true})
   else
     return nil
   end
 end
-_2amodule_locals_2a["display-repl-status"] = display_repl_status
-local function disconnect()
-  local repl = state("repl")
-  if repl then
-    repl.destroy()
-    a.assoc(repl, "status", "disconnected")
-    display_repl_status()
-    return a.assoc(state(), "repl", nil)
-  else
-    return nil
-  end
-end
-_2amodule_2a["disconnect"] = disconnect
-local function parse_guile_result(s)
-  local prompt = s:find("scheme@%([%w%-%s]+%)> ")
-  if prompt then
-    local ind1, _0, result = s:find("%$%d+ = ([^\n]+)\n")
-    local stray_output
-    local function _22_()
-      if result then
-        return ind1
-      else
-        return prompt
-      end
-    end
-    stray_output = s:sub(1, (_22_() - 1))
-    if (#stray_output > 0) then
-      log.append(text["prefixed-lines"](text["trim-last-newline"](stray_output), "; (out) "))
+M.disconnect = function()
+  do
+    local repl = state("repl")
+    if repl then
+      repl.destroy()
+      a.assoc(repl, "status", "disconnected")
+      display_repl_status()
+      a.assoc(state(), "repl", nil)
     else
     end
-    return {["done?"] = true, result = result, ["error?"] = false}
+  end
+  return a.assoc(state(), "known-contexts", {})
+end
+M["parse-guile-result"] = function(s, stray_output_fn)
+  local find_prompt
+  local function _28_(s0)
+    return s0:find("scheme@%([%w%-%s]+%)> ")
+  end
+  find_prompt = _28_
+  local prompt = find_prompt(s)
+  if prompt then
+    local s_no_prompt = s:sub(0, (prompt - 1))
+    local lines
+    local function _29_(line)
+      if string.match(line, "^(.-)%s*%$%d+ = .*$") then
+        local before = string.match(line, "^(.-)%s*%$%d+ = .*$")
+        local after = string.match(line, "^.-%s*(%$%d+ = .*)$")
+        return {before, after}
+      else
+        return {line}
+      end
+    end
+    lines = a.mapcat(_29_, text["split-lines"](s_no_prompt))
+    local stray_output_lines = {}
+    local results = {}
+    for _n, line in ipairs(lines) do
+      local result = string.match(line, "^%$%d+ = (.*)$")
+      if result then
+        table.insert(results, result)
+      else
+        if ("" ~= line) then
+          table.insert(stray_output_lines, (M["comment-prefix"] .. "(out) " .. line))
+        else
+        end
+      end
+    end
+    if (#stray_output_lines > 0) then
+      stray_output_fn(stray_output_lines)
+    else
+    end
+    local _34_
+    if (1 == #results) then
+      _34_ = a.first(results)
+    elseif (#results > 1) then
+      _34_ = ("(values " .. str.join(" ", results) .. ")")
+    else
+      _34_ = nil
+    end
+    return {["done?"] = true, result = _34_, ["error?"] = false}
   elseif s:find("scheme@%([%w%-%s]+%) %[%d+%]>") then
     return {["done?"] = true, ["error?"] = true, result = nil}
   else
-    return {result = s, ["error?"] = false, ["done?"] = false}
+    return {result = s, ["done?"] = false, ["error?"] = false}
   end
 end
-_2amodule_locals_2a["parse-guile-result"] = parse_guile_result
-local function connect(opts)
-  disconnect()
-  local pipename = (cfg({"pipename"}) or a.get(opts, "port"))
-  if ("string" ~= type(pipename)) then
-    return log.append({(comment_prefix .. "g:conjure#client#guile#socket#pipename is not specified"), (comment_prefix .. "Please set it to the name of your Guile REPL pipe or pass it to :ConjureConnect [pipename]")})
-  else
-    local function _25_()
-      return display_repl_status()
-    end
-    local function _26_(msg, repl)
-      display_result(msg)
-      local function _27_()
+M.connect = function(_opts)
+  M.disconnect()
+  local pipename = cfg({"pipename"})
+  local cfg_host_port = cfg({"host_port"})
+  local host_port
+  if cfg_host_port then
+    local _let_37_ = vim.split(cfg_host_port, ":")
+    local host = _let_37_[1]
+    local port = _let_37_[2]
+    log.dbg(a.str("client.guile.socket: host=", host))
+    log.dbg(a.str("client.guile.socket: port=", port))
+    if (not host and not port) then
+      host_port = "localhost:37146"
+    elseif (not host and tonumber(port)) then
+      host_port = a.str("localhost:", port)
+    elseif (host and not port) then
+      if tonumber(host) then
+        host_port = a.str("localhost:", host)
+      else
+        host_port = a.str(host, ":37146")
       end
-      return repl.send(",q\n", _27_)
+    else
+      host_port = cfg_host_port
     end
-    return a.assoc(state(), "repl", socket.start({["parse-output"] = parse_guile_result, pipename = pipename, ["on-success"] = _25_, ["on-error"] = _26_, ["on-failure"] = disconnect, ["on-close"] = disconnect, ["on-stray-output"] = display_result}))
+  else
+    host_port = nil
+  end
+  log.dbg(a.str("client.guile.socket: pipename=", pipename))
+  log.dbg(a.str("client.guile.socket: host-port=", cfg_host_port))
+  local function _41_(_241)
+    return M["parse-guile-result"](_241, log.append)
+  end
+  local function _42_()
+    if completions_enabled_3f() then
+      cmpl["get-static-completions"]()
+    else
+    end
+    return display_repl_status()
+  end
+  local function _44_(msg, repl)
+    display_result(msg)
+    local function _45_()
+    end
+    return repl.send(",q\n", _45_)
+  end
+  return a.assoc(state(), "repl", socket.start({["parse-output"] = _41_, pipename = pipename, ["host-port"] = host_port, ["on-success"] = _42_, ["on-error"] = _44_, ["on-failure"] = M.disconnect, ["on-close"] = M.disconnect, ["on-stray-output"] = display_result}))
+end
+local function connected_3f()
+  if state("repl") then
+    return true
+  else
+    return false
   end
 end
-_2amodule_2a["connect"] = connect
-local function on_exit()
-  return disconnect()
+local function busy_3f()
+  return (connected_3f() and state("repl").current)
 end
-_2amodule_2a["on-exit"] = on_exit
-local function on_filetype()
-  local function _29_()
-    return connect()
+M["on-exit"] = function()
+  return M.disconnect()
+end
+M["on-filetype"] = function()
+  local function _47_()
+    return M.connect()
   end
-  mapping.buf("GuileConnect", cfg({"mapping", "connect"}), _29_, {desc = "Connect to a REPL"})
-  return mapping.buf("GuileDisconnect", cfg({"mapping", "disconnect"}), disconnect, {desc = "Disconnect from the REPL"})
+  mapping.buf("GuileConnect", cfg({"mapping", "connect"}), _47_, {desc = "Connect to a REPL"})
+  local function _48_()
+    return M.disconnect()
+  end
+  return mapping.buf("GuileDisconnect", cfg({"mapping", "disconnect"}), _48_, {desc = "Disconnect from the REPL"})
 end
-_2amodule_2a["on-filetype"] = on_filetype
-return _2amodule_2a
+local function generate_completions(opts)
+  local prefix = (opts.prefix or "")
+  local static_suggestions = cmpl["get-static-completions"](prefix)
+  if (connected_3f() and not busy_3f()) then
+    local code = cmpl["build-completion-request"](opts.prefix)
+    local result_fn
+    local function _49_(results)
+      local cmpl_list = cmpl["format-results"](results)
+      local all_cmpl = a.concat(static_suggestions, cmpl_list)
+      local distinct_cmpl = util["ordered-distinct"](all_cmpl)
+      return opts.cb(distinct_cmpl)
+    end
+    result_fn = _49_
+    a.assoc(opts, "code", code)
+    a.assoc(opts, "on-result", result_fn)
+    a.assoc(opts, "passive?", true)
+    return M["eval-str"](opts)
+  else
+    return opts.cb(static_suggestions)
+  end
+end
+M.completions = function(opts)
+  if completions_enabled_3f() then
+    return generate_completions(opts)
+  else
+    return opts.cb({})
+  end
+end
+return M

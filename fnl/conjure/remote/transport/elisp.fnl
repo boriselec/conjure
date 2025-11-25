@@ -1,24 +1,26 @@
-(module conjure.remote.transport.elisp
-  {autoload {a conjure.aniseed.core
-             str conjure.aniseed.string
-             text conjure.text
-             stack conjure.stack}})
+(local {: autoload : define} (require :conjure.nfnl.module))
+(local core (autoload :conjure.nfnl.core))
+(local stack (autoload :conjure.stack))
+(local str (autoload :conjure.nfnl.string))
+(local text (autoload :conjure.text))
 
-(defn- err [...]
-  (error (str.join [*module-name* ": " ...])))
+(local M (define :conjure.remote.transport.elisp))
 
-(def- symbol-char-pat "[a-zA-Z0-9_-]")
-(def- number-char-pat "[0-9.-]")
-(def- whitespace-char-pat "%s")
+(fn err [...]
+  (error (str.join ["conjure.remote.transport.elisp: " ...])))
+
+(local symbol-char-pat "[a-zA-Z0-9_-]")
+(local number-char-pat "[0-9.-]")
+(local whitespace-char-pat "%s")
 
 ;; Beware, here be dragons. Really cool magic dragons, but dragons all the same.
 ;; Grab a coffee, put on your seat belt. Good luck.
-(defn- read* [cs ctxs result]
-  (if (a.empty? cs)
+(fn read* [cs ctxs result]
+  (if (core.empty? cs)
     result
     (let [prev-cs cs
-          c (a.first cs)
-          cs (a.rest cs)
+          c (core.first cs)
+          cs (core.rest cs)
           {:name ctx-name
            :value ctx-value} (or (stack.peek ctxs) {})]
 
@@ -70,7 +72,7 @@
             cs ctxs
             (let [result (.. result c)]
               ;; If we're on the last character of the input, we concat _and_ parse.
-              (if (a.empty? cs)
+              (if (core.empty? cs)
                 (tonumber result)
                 result)))
 
@@ -80,7 +82,7 @@
           (read* prev-cs (stack.pop ctxs) (tonumber result)))
 
         ;; If we're in a list or nothing at all, we look for more context clues for the next value.
-        (or (= :list ctx-name) (a.nil? ctx-name))
+        (or (= :list ctx-name) (core.nil? ctx-name))
         (if
           ;; Begin a string.
           (= "\"" c)
@@ -116,5 +118,7 @@
         ;; Catch all, stop processing if we're confused.
         (err "Unknown `ctx`: " ctx-name)))))
 
-(defn read [s]
+(fn M.read [s]
   (read* (text.chars s) [] nil))
+
+M

@@ -1,74 +1,56 @@
-local _2afile_2a = "fnl/conjure/linked-list.fnl"
-local _2amodule_name_2a = "conjure.linked-list"
-local _2amodule_2a
-do
-  package.loaded[_2amodule_name_2a] = {}
-  _2amodule_2a = package.loaded[_2amodule_name_2a]
-end
-local _2amodule_locals_2a
-do
-  _2amodule_2a["aniseed/locals"] = {}
-  _2amodule_locals_2a = (_2amodule_2a)["aniseed/locals"]
-end
-local autoload = (require("conjure.aniseed.autoload")).autoload
-local a = autoload("conjure.aniseed.core")
-do end (_2amodule_locals_2a)["a"] = a
-local function create(xs, prev)
-  if not a["empty?"](xs) then
-    local rest = a.rest(xs)
+-- [nfnl] fnl/conjure/linked-list.fnl
+local _local_1_ = require("conjure.nfnl.module")
+local autoload = _local_1_.autoload
+local define = _local_1_.define
+local core = autoload("conjure.nfnl.core")
+local M = define("conjure.linked-list")
+M.create = function(xs, prev)
+  if not core["empty?"](xs) then
+    local rest = core.rest(xs)
     local node = {}
-    a.assoc(node, "val", a.first(xs))
-    a.assoc(node, "prev", prev)
-    return a.assoc(node, "next", create(rest, node))
+    core.assoc(node, "val", core.first(xs))
+    core.assoc(node, "prev", prev)
+    return core.assoc(node, "next", M.create(rest, node))
   else
     return nil
   end
 end
-_2amodule_2a["create"] = create
-local function val(l)
-  local _2_ = l
-  if (nil ~= _2_) then
-    return a.get(_2_, "val")
+M.val = function(l)
+  if (nil ~= l) then
+    return core.get(l, "val")
   else
-    return _2_
+    return nil
   end
 end
-_2amodule_2a["val"] = val
-local function next(l)
-  local _4_ = l
-  if (nil ~= _4_) then
-    return a.get(_4_, "next")
+M.next = function(l)
+  if (nil ~= l) then
+    return core.get(l, "next")
   else
-    return _4_
+    return nil
   end
 end
-_2amodule_2a["next"] = next
-local function prev(l)
-  local _6_ = l
-  if (nil ~= _6_) then
-    return a.get(_6_, "prev")
+M.prev = function(l)
+  if (nil ~= l) then
+    return core.get(l, "prev")
   else
-    return _6_
+    return nil
   end
 end
-_2amodule_2a["prev"] = prev
-local function first(l)
+M.first = function(l)
   local c = l
-  while prev(c) do
-    c = prev(c)
+  while M.prev(c) do
+    c = M.prev(c)
   end
   return c
 end
-_2amodule_2a["first"] = first
-local function last(l)
+M.last = function(l)
   local c = l
-  while next(c) do
-    c = next(c)
+  while M.next(c) do
+    c = M.next(c)
   end
   return c
 end
-_2amodule_2a["last"] = last
-local function _until(f, l)
+M["until"] = function(f, l)
   local c = l
   local r = false
   local function step()
@@ -76,7 +58,7 @@ local function _until(f, l)
     return r
   end
   while (c and not step()) do
-    c = next(c)
+    c = M.next(c)
   end
   if r then
     return c
@@ -84,13 +66,11 @@ local function _until(f, l)
     return nil
   end
 end
-_2amodule_2a["until"] = _until
-local function cycle(l)
-  local start = first(l)
-  local _end = last(l)
-  a.assoc(start, "prev", _end)
-  a.assoc(_end, "next", start)
+M.cycle = function(l)
+  local start = M.first(l)
+  local _end = M.last(l)
+  core.assoc(start, "prev", _end)
+  core.assoc(_end, "next", start)
   return l
 end
-_2amodule_2a["cycle"] = cycle
-return _2amodule_2a
+return M

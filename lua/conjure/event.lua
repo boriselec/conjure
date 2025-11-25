@@ -1,35 +1,24 @@
-local _2afile_2a = "fnl/conjure/event.fnl"
-local _2amodule_name_2a = "conjure.event"
-local _2amodule_2a
-do
-  package.loaded[_2amodule_name_2a] = {}
-  _2amodule_2a = package.loaded[_2amodule_name_2a]
-end
-local _2amodule_locals_2a
-do
-  _2amodule_2a["aniseed/locals"] = {}
-  _2amodule_locals_2a = (_2amodule_2a)["aniseed/locals"]
-end
-local autoload = (require("conjure.aniseed.autoload")).autoload
-local a, client, nvim, str, text = autoload("conjure.aniseed.core"), autoload("conjure.client"), autoload("conjure.aniseed.nvim"), autoload("conjure.aniseed.string"), autoload("conjure.text")
-do end (_2amodule_locals_2a)["a"] = a
-_2amodule_locals_2a["client"] = client
-_2amodule_locals_2a["nvim"] = nvim
-_2amodule_locals_2a["str"] = str
-_2amodule_locals_2a["text"] = text
-local function emit(...)
+-- [nfnl] fnl/conjure/event.fnl
+local _local_1_ = require("conjure.nfnl.module")
+local autoload = _local_1_.autoload
+local define = _local_1_.define
+local core = autoload("conjure.nfnl.core")
+local text = autoload("conjure.text")
+local client = autoload("conjure.client")
+local str = autoload("conjure.nfnl.string")
+local M = define("conjure.event")
+M.emit = function(...)
   do
-    local names = a.map(text["upper-first"], {...})
-    local function _1_()
-      while not a["empty?"](names) do
-        nvim.ex.doautocmd("User", ("Conjure" .. str.join(names)))
+    local names = core.map(text["upper-first"], {...})
+    local function _2_()
+      while not core["empty?"](names) do
+        vim.cmd.doautocmd("User", ("Conjure" .. str.join(names)))
         table.remove(names)
       end
       return nil
     end
-    client.schedule(_1_)
+    client.schedule(_2_)
   end
   return nil
 end
-_2amodule_2a["emit"] = emit
-return _2amodule_2a
+return M

@@ -1,19 +1,12 @@
-(module conjure.tree-sitter
-  {autoload {a conjure.aniseed.core
-             str conjure.aniseed.string
-             nvim conjure.aniseed.nvim
-             client conjure.client
-             config conjure.config
-             text conjure.text}})
+(local {: autoload} (require :conjure.nfnl.module))
+(local a (autoload :conjure.nfnl.core))
+(local client (autoload :conjure.client))
+(local config (autoload :conjure.config))
+(local text (autoload :conjure.text))
 
 ;; Initially based on https://github.com/savq/conjure-julia <3
 
-(def- ts
-  (let [(ok? x) (pcall #(require :nvim-treesitter.ts_utils))]
-    (when ok?
-      x)))
-
-(defn enabled? []
+(fn enabled? []
   "Do we have tree-sitter support in the current nvim, buffer and filetype. If
   this is false, you might need to install
   https://github.com/nvim-treesitter/nvim-treesitter
@@ -21,47 +14,46 @@
 
   See also: g:conjure#extract#tree_sitter#enabled"
   (if (and
-        (= :table (type ts))
         (config.get-in [:extract :tree_sitter :enabled])
         (let [(ok? parser) (pcall vim.treesitter.get_parser)]
           (and ok? parser)))
     true
     false))
 
-(defn parse! []
+(fn parse! []
   (let [(ok? parser) (pcall vim.treesitter.get_parser)]
     (if ok?
       (parser:parse))))
 
-(defn node->str [node]
+(fn node->str [node]
   "Turn the node into a string, nils flow through. Separate forms are joined by
   new lines."
   (when node
     (if vim.treesitter.get_node_text
-      (vim.treesitter.get_node_text node (nvim.get_current_buf))
-      (vim.treesitter.query.get_node_text node (nvim.get_current_buf)))))
+      (vim.treesitter.get_node_text node (vim.api.nvim_get_current_buf))
+      (vim.treesitter.query.get_node_text node (vim.api.nvim_get_current_buf)))))
 
-(defn lisp-comment-node? [node]
+(fn lisp-comment-node? [node]
   "Node is a (comment ...) form"
   (text.starts-with (node->str node) "(comment"))
 
-(defn parent [node]
+(fn parent [node]
   "Get the parent if possible."
   (when node
     (node:parent)))
 
-(defn document? [node]
+(fn document? [node]
   "Is the node the entire document, i.e. has no parent?"
   (not (parent node)))
 
-(defn range [node]
+(fn range [node]
   "Get the character range of the form."
   (when node
     (let [(sr sc er ec) (node:range)]
       {:start [(a.inc sr) sc]
        :end [(a.inc er) (a.dec ec)]})))
 
-(defn node->table [node]
+(fn node->table [node]
   "If it is a node, convert it to a Lua table we can work with in Conjure. If
   it's already a table with the right keys just return that."
   (if
@@ -70,15 +62,16 @@
 
     node
     {:range (range node)
-     :content (node->str node)}
+     :content (node->str node)
+     :node node}
 
     nil))
 
-(defn get-root [node]
+(fn get-root [node]
   "Get the root node below the entire document."
   (parse!)
 
-  (let [node (or node (ts.get_node_at_cursor))
+  (let [node (or node (vim.treesitter.get_node))
         parent-node (parent node)]
     (if
       (document? node) nil
@@ -86,7 +79,7 @@
       (client.optional-call :comment-node? parent-node) node
       (get-root parent-node))))
 
-(defn leaf? [node]
+(fn leaf? [node]
   "Does the node have any children? Or is it the end of the tree?"
   (when node
     (= 0 (node:child_count))))
@@ -94,23 +87,24 @@
 ;; Some node types I've seen: sym_lit, symbol, multi_symbol...
 ;; So I'm not sure if each language just picks a flavour, but this should cover all of our bases.
 ;; Clients can also opt in and hint with their own symbol-node? functions now too.
-(defn sym? [node]
+(fn sym? [node]
   (when node
     (or (string.find (node:type) :sym)
+        (= (node:type) :package_lit) ;; just for common lisp
         (client.optional-call :symbol-node? node))))
 
-(defn get-leaf [node]
+(fn get-leaf [node]
   "Return the leaf node under the cursor or nothing at all."
   (parse!)
 
-  (let [node (or node (ts.get_node_at_cursor))]
+  (let [node (or node (vim.treesitter.get_node))]
     (when (or (leaf? node) (sym? node))
       (var node node)
       (while (sym? (parent node))
         (set node (parent node)))
       node)))
 
-(defn node-surrounded-by-form-pair-chars? [node extra-pairs]
+(fn node-surrounded-by-form-pair-chars? [node extra-pairs]
   (let [node-str (node->str node)
         first-and-last-chars (text.first-and-last-chars node-str)]
     (or (a.some
@@ -119,20 +113,20 @@
           (config.get-in [:extract :form_pairs]))
         (a.some
           (fn [[start end]]
-            (and (text.starts-with node-str start)
-                 (text.ends-with node-str end)))
+            (and (vim.startswith node-str start)
+                 (vim.endswith node-str end)))
           extra-pairs)
         false)))
 
-(defn node-prefixed-by-chars? [node prefixes]
+(fn node-prefixed-by-chars? [node prefixes]
   (let [node-str (node->str node)]
     (or (a.some
           (fn [prefix]
-            (text.starts-with node-str prefix))
+            (vim.startswith node-str prefix))
           prefixes)
         false)))
 
-(defn get-form [node]
+(fn get-form [node]
   "Get the current form under the cursor. Walks up until it finds a non-leaf.
 
   Warning, this can return a table containing content and range! Use
@@ -144,7 +138,7 @@
   (when (not node)
     (parse!))
 
-  (let [node (or node (ts.get_node_at_cursor))]
+  (let [node (or node (vim.treesitter.get_node))]
     (if
       ;; If we're already at the root then we're not in a form.
       (document? node)
@@ -194,3 +188,41 @@
           (do
             (a.println "Warning: Conjure client returned an unknown get-form-modifier" res)
             node))))))
+
+(fn add-language [lang]
+  ((or vim.treesitter.language.add
+       vim.treesitter.language.require_language
+       vim.treesitter.require_language)
+   lang))
+
+(fn get-root-node-for-str [lang code]
+  (let [parser (vim.treesitter.get_string_parser code lang)]
+    (parser:parse)
+    (let [trees (parser:trees)]
+      (when (and trees
+                 (> (length trees) 0))
+        (let [root-tree (. trees 1)]
+          (root-tree:root))))))
+
+(fn valid-str? [lang code]
+  (let [root-node (get-root-node-for-str lang code)]
+    (and root-node
+         (not (root-node:has_error)))))
+
+{: enabled?
+ : parse!
+ : node->str
+ : lisp-comment-node?
+ : parent
+ : document?
+ : range
+ : node->table
+ : get-root
+ : leaf?
+ : sym?
+ : get-leaf
+ : node-surrounded-by-form-pair-chars?
+ : node-prefixed-by-chars?
+ : get-form
+ : add-language
+ : valid-str?}

@@ -1,63 +1,71 @@
-(module conjure.school
-  {autoload {nvim conjure.aniseed.nvim
-             buffer conjure.buffer
-             config conjure.config
-             editor conjure.editor
-             str conjure.aniseed.string
-             a conjure.aniseed.core}})
+(local {: autoload} (require :conjure.nfnl.module))
+(local core (autoload :conjure.nfnl.core))
+(local buffer (autoload :conjure.buffer))
+(local config (autoload :conjure.config))
+(local editor (autoload :conjure.editor))
+(local str (autoload :conjure.nfnl.string))
 
-(def- buf-name "conjure-school.fnl")
+(local buf-name "conjure-school.fnl")
 
-(defn- upsert-buf []
+(fn upsert-buf []
   (buffer.upsert-hidden buf-name))
 
-(defn- append [lines]
+(fn append [lines]
   (let [buf (upsert-buf)
-        current-buf-str (str.join "\n" (nvim.buf_get_lines 0 0 -1 true))
+        current-buf-str (str.join "\n" (vim.api.nvim_buf_get_lines 0 0 -1 true))
         to-insert-str (str.join "\n" lines)]
     (when (not (string.find current-buf-str to-insert-str 0 true))
-      (nvim.buf_set_lines
+      (vim.api.nvim_buf_set_lines
         buf
         (if (buffer.empty? buf) 0 -1)
         -1 false lines)
       true)))
 
-(defn- map-str [m]
+(fn map-str [m]
   (.. (config.get-in [:mapping :prefix])
       (config.get-in [:mapping m])))
 
-(defn- progress [n]
-  (.. "Lesson ["n "/7] complete!"))
+(fn progress [n]
+  (.. "Lesson [" n "/7] complete!"))
 
-(defn- append-or-warn [current-progress lines]
+(fn append-or-warn [current-progress lines]
   (if (append lines)
     (progress current-progress)
     "You've already completed this lesson! You can (u)ndo and run it again though if you'd like."))
 
-(defn start []
+(fn start []
+  (when (and (not= vim.g.conjure#filetype#fennel "conjure.client.fennel.aniseed")
+             (not= vim.g.conjure#filetype#fennel "conjure.client.fennel.nfnl"))
+    (vim.notify_once
+      (.. "Warning: g:conjure#filetype#fennel not set to a supported client.\n"
+          "Overriding to 'conjure.client.fennel.nfnl'"))
+    (set vim.g.conjure#filetype#fennel "conjure.client.fennel.nfnl"))
+
   (when (not (editor.has-filetype? :fennel))
-    (nvim.echo
-      "Warning: No Fennel filetype found, falling back to Clojure syntax."
-      "Install https://github.com/Olical/aniseed for better Fennel support.")
-    (set nvim.g.conjure#filetype#clojure nvim.g.conjure#filetype#fennel)
-    (nvim.ex.augroup :conjure_school_filetype)
-    (nvim.ex.autocmd_)
-    (nvim.ex.autocmd "BufNewFile,BufRead *.fnl setlocal filetype=clojure")
-    (nvim.ex.augroup :END))
+    (vim.notify_once
+      (.. "Warning: No Fennel filetype found, falling back to Clojure syntax.\n"
+          "Install https://github.com/atweiden/vim-fennel for better Fennel support."))
+    (set vim.g.conjure#filetype#clojure vim.g.conjure#filetype#fennel)
+
+    (vim.api.nvim_create_autocmd
+      [:BufNewFile :BufRead]
+      {:group (vim.api.nvim_create_augroup :conjure_school_filetype {:clear true})
+      :pattern :*.fnl
+      :command "setlocal filetype=clojure"}))
 
   (let [maplocalleader-was-unset?
         (when (and (= "<localleader>" (config.get-in [:mapping :prefix]))
-                   (a.empty? nvim.g.maplocalleader))
-          (set nvim.g.maplocalleader ",")
+                   (core.empty? vim.g.maplocalleader))
+          (set vim.g.maplocalleader ",")
           true)
 
         buf (upsert-buf)]
-    (nvim.ex.edit buf-name)
-    (nvim.buf_set_lines buf 0 -1 false [])
+    (vim.cmd.edit buf-name)
+    (vim.api.nvim_buf_set_lines buf 0 -1 false [])
     (append
-      (a.concat
-        ["(module user.conjure-school"
-                  "  {require {school conjure.school}})"
+      (core.concat
+        [
+         "(local school (require :conjure.school))"
          ""
          ";; Welcome to Conjure school!"
          ";; Grab yourself a nice beverage and let's get evaluating. I hope you enjoy!"
@@ -75,10 +83,10 @@
         (if maplocalleader-was-unset?
           [";; Your <localleader> wasn't configured so I've defaulted it to comma (,) for now."
            ";; See :help localleader for more information. (let maplocalleader=\",\")"]
-          [(.. ";; Your <localleader> is currently mapped to \"" nvim.g.maplocalleader "\"")])
+          [(.. ";; Your <localleader> is currently mapped to \"" vim.g.maplocalleader "\"")])
         ["(school.lesson-1)"]))))
 
-(defn lesson-1 []
+(fn lesson-1 []
   (append-or-warn
     1
     [""
@@ -106,7 +114,7 @@
      "(comment"
         "  (school.lesson-2))"]))
 
-(defn lesson-2 []
+(fn lesson-2 []
   (append-or-warn
     2
     [""
@@ -118,7 +126,7 @@
         "  (print \"Hello, World!\")"
         "  (school.lesson-3))"]))
 
-(defn lesson-3 []
+(fn lesson-3 []
   (append-or-warn
     3
     [""
@@ -130,7 +138,7 @@
      (.. ";; We'll try that in the next lesson, place your cursor inside the form below and press " (map-str :eval_replace_form))
      "(school.lesson-4)"]))
 
-(defn lesson-4 []
+(fn lesson-4 []
   (append-or-warn
     4
     [""
@@ -141,10 +149,10 @@
      ";; If you use a capital letter like mF you can even open a different file and evaluate that marked form without changing buffers!"
      "(school.lesson-5)"]))
 
-(def lesson-5-message
+(local lesson-5-message
   "This is the contents of school.lesson-5-message!")
 
-(defn lesson-5 []
+(fn lesson-5 []
   (append-or-warn
     5
     [""
@@ -159,29 +167,40 @@
      ";; Try evaluating the form below using a visual selection."
      "(school.lesson-6)"]))
 
-(def lesson-6-message
+(local lesson-6-message
   "This is the contents of school.lesson-6-message!")
 
-(defn lesson-6 []
+(fn lesson-6 []
   (append-or-warn
     6
     [""
      ";; Wonderful!"
      ";; Visual evaluation is great for specific sections of a form."
      (.. ";; You can also evaluate a given motion with " (map-str :eval_motion))
-     (.. ";; Try " (map-str :eval_motion) "iw below to evaluate the word.")
+     (.. ";; Try " (map-str :eval_motion) "iW below to evaluate the word.")
      "school.lesson-6-message"
      ""
      (.. ";; Use " (map-str :eval_motion) "a( to evaluate the lesson form.")
          "(school.lesson-7)"]))
 
-(defn lesson-7 []
+(fn lesson-7 []
   (append-or-warn
     7
     [""
      ";; Excellent job, you made it to the end!"
      ";; To learn more about configuring Conjure, install the plugin and check out :help conjure"
      ";; You can learn about specific languages with :help conjure-client- and then tab completion."
-     ";; For example, conjure-client-fennel-aniseed or conjure-client-clojure-nrepl."
+     ";; For example, conjure-client-fennel-nfnl or conjure-client-clojure-nrepl."
      ""
      ";; I hope you have a wonderful time in Conjure!"]))
+
+{: start
+ : lesson-1
+ : lesson-2
+ : lesson-3
+ : lesson-4
+ : lesson-5
+ : lesson-6
+ : lesson-7
+ : lesson-5-message
+ : lesson-6-message}

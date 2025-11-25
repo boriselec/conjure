@@ -1,29 +1,32 @@
-(module conjure.inline
-  {autoload {a conjure.aniseed.core
-             config conjure.config
-             nvim conjure.aniseed.nvim}})
+(local {: autoload : define} (require :conjure.nfnl.module))
+(local core (autoload :conjure.nfnl.core))
+(local config (autoload :conjure.config))
 
-(defonce ns-id (nvim.create_namespace *module-name*))
+(local M (define :conjure.inline))
 
-(defn sanitise-text [s]
-  (if (a.string? s)
+(local ns-id (vim.api.nvim_create_namespace :conjure.inline))
+
+(fn M.sanitise-text [s]
+  (if (core.string? s)
     (s:gsub "%s+" " ")
     ""))
 
-(defn clear [opts]
+(fn M.clear [opts]
   "Clear all (Conjure related) virtual text for opts.buf, defaults to 0 which
   is the current buffer."
   (pcall
     (fn []
-      (nvim.buf_clear_namespace (a.get opts :buf 0) ns-id 0 -1))))
+      (vim.api.nvim_buf_clear_namespace (core.get opts :buf 0) ns-id 0 -1))))
 
-(defn display [opts]
+(fn M.display [opts]
   "Display virtual text for opts.buf on opts.line containing opts.text."
   (local hl-group (config.get-in [:eval :inline :highlight]))
   (pcall
     (fn []
-      (clear)
-      (nvim.buf_set_virtual_text
-        (a.get opts :buf 0) ns-id opts.line
-        [[(sanitise-text opts.text) hl-group]]
+      (M.clear)
+      (vim.api.nvim_buf_set_virtual_text
+        (core.get opts :buf 0) ns-id opts.line
+        [[(M.sanitise-text opts.text) hl-group]]
         {}))))
+
+M

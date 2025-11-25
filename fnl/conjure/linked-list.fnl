@@ -1,49 +1,53 @@
-(module conjure.linked-list
-  {autoload {a conjure.aniseed.core}})
+(local {: autoload : define} (require :conjure.nfnl.module))
+(local core (autoload :conjure.nfnl.core))
 
-(defn create [xs prev]
-  (when (not (a.empty? xs))
-    (let [rest (a.rest xs)
+(local M (define :conjure.linked-list))
+
+(fn M.create [xs prev]
+  (when (not (core.empty? xs))
+    (let [rest (core.rest xs)
           node {}]
-      (a.assoc node :val (a.first xs))
-      (a.assoc node :prev prev)
-      (a.assoc node :next (create rest node)))))
+      (core.assoc node :val (core.first xs))
+      (core.assoc node :prev prev)
+      (core.assoc node :next (M.create rest node)))))
 
-(defn val [l]
-  (-?> l (a.get :val)))
+(fn M.val [l]
+  (-?> l (core.get :val)))
 
-(defn next [l]
-  (-?> l (a.get :next)))
+(fn M.next [l]
+  (-?> l (core.get :next)))
 
-(defn prev [l]
-  (-?> l (a.get :prev)))
+(fn M.prev [l]
+  (-?> l (core.get :prev)))
 
-(defn first [l]
+(fn M.first [l]
   (var c l)
-  (while (prev c)
-    (set c (prev c)))
+  (while (M.prev c)
+    (set c (M.prev c)))
   c)
 
-(defn last [l]
+(fn M.last [l]
   (var c l)
-  (while (next c)
-    (set c (next c)))
+  (while (M.next c)
+    (set c (M.next c)))
   c)
 
-(defn until [f l]
+(fn M.until [f l]
   (var c l)
   (var r false)
   (fn step []
     (set r (f c))
     r)
   (while (and c (not (step)))
-    (set c (next c)))
+    (set c (M.next c)))
   (when r
     c))
 
-(defn cycle [l]
-  (let [start (first l)
-        end (last l)]
-    (a.assoc start :prev end)
-    (a.assoc end :next start)
+(fn M.cycle [l]
+  (let [start (M.first l)
+        end (M.last l)]
+    (core.assoc start :prev end)
+    (core.assoc end :next start)
     l))
+
+M

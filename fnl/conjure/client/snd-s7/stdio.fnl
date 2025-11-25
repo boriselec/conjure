@@ -1,10 +1,23 @@
+(local {: autoload : define} (require :conjure.nfnl.module))
+(local a (autoload :conjure.nfnl.core))
+(local str (autoload :conjure.nfnl.string))
+(local client (autoload :conjure.client))
+(local log (autoload :conjure.log))
+(local stdio (autoload :conjure.remote.stdio-rt))
+(local config (autoload :conjure.config))
+(local mapping (autoload :conjure.mapping))
+(local text (autoload :conjure.text))
+(local ts (autoload :conjure.tree-sitter))
+
+(local M (define :conjure.client.snd-s7.stdio))
+
 ;;------------------------------------------------------------
+;; NOTE: Uses fnl/conjure/remote/stdio-rt.fnl; not fnl/conjure/remote/stdio.fnl.
+;;
 ;; A client for snd/s7 (sound editor with s7 scheme scripting)
 ;;
 ;; Based on: fnl/conjure/client/scheme/stdio.fnl
 ;;           fnl/conjure/client/sql/stdio.fnl
-;;
-;; Uses fnl/conjure/remote/stdio-rt.fnl; not fnl/conjure/remote/stdio.fnl.
 ;;
 ;; The `snd` program should be runnable on the command line.
 ;;
@@ -12,20 +25,7 @@
 ;;       To use this instead of the default Scheme client, set
 ;;       `g:conjure#filetype#scheme` to `"conjure.client.snd-s7.stdio"`.
 ;;       client in fnl/conjure/config.fnl.
-;;
 ;;------------------------------------------------------------
-
-(module conjure.client.snd-s7.stdio
-  {autoload {a conjure.aniseed.core
-             str conjure.aniseed.string
-             nvim conjure.aniseed.nvim
-             stdio conjure.remote.stdio-rt
-             config conjure.config
-             mapping conjure.mapping
-             client conjure.client
-             log conjure.log
-             ts conjure.tree-sitter}
-   require-macros [conjure.macros]})
 
 (config.merge
   {:client
@@ -43,43 +43,54 @@
                   :stop "cS"
                   :interrupt "ei"}}}}}))
 
-(def- cfg (config.get-in-fn [:client :snd-s7 :stdio]))
+(local cfg (config.get-in-fn [:client :snd-s7 :stdio]))
+(local state (client.new-state #(do {:repl nil})))
 
-(defonce- state (client.new-state #(do {:repl nil})))
+(set M.buf-suffix ".scm")
+(set M.comment-prefix "; ")
+;; Use Lisp syntax.
+(set M.form-node? ts.node-surrounded-by-form-pair-chars?)
 
-(def buf-suffix ".scm")
-(def comment-prefix "; ")
-(def form-node? ts.node-surrounded-by-form-pair-chars?)
-
-(defn- with-repl-or-warn [f opts]
+(fn with-repl-or-warn [f opts]
   (let [repl (state :repl)]
     (if repl
       (f repl)
-      (log.append [(.. comment-prefix "No REPL running")]))))
+      (log.append [(.. M.comment-prefix "No REPL running")]))))
 
 ;;;;-------- from client/sql/stdio.fnl ----------------------
-(defn- format-message [msg]
+(fn format-message [msg]
   (str.split (or msg.out msg.err) "\n"))
 
-(defn- remove-blank-lines [msg]
+(fn remove-blank-lines [msg]
   (->> (format-message msg)
        (a.filter #(not (= "" $1)))))
 
-(defn- display-result [msg]
+(fn display-result [msg]
   (log.append (remove-blank-lines msg)))
 
-(defn ->list [s]
+(fn M.->list [s]
   (if (a.first s)
     s
     [s]))
 
-(defn eval-str [opts]
+;; Split string on newlines, remove trailing comments, and join lines into one
+;; string. s7 doesn't handle multi-line string when sent via a subprocess.
+(fn split-and-join [s]
+  (str.join
+    (a.map
+      #(-> $1 (str.trimr) (string.gsub "%s*%;[^\n]*$" ""))
+      (text.split-lines s))))
+
+(fn M.eval-str [opts]
+  (log.dbg (.. "eval-str: opts >>" (a.pr-str opts) "<<"))
+  (log.dbg (.. "eval-str: opts.code >>" (a.pr-str opts.code) "<<"))
+
   (with-repl-or-warn
     (fn [repl]
       (repl.send
-        (.. opts.code "\n")
+        (.. (split-and-join opts.code) "\n")
         (fn [msgs]
-          (let [msgs (->list msgs)]
+          (let [msgs (M.->list msgs)]
             (when opts.on-result
               (opts.on-result (str.join "\n" (remove-blank-lines (a.last msgs)))))
             (a.run! display-result msgs))
@@ -87,33 +98,34 @@
         {:batch? false}))))
 ;;;;-------- End from client/sql/stdio.fnl ------------------
 
-(defn eval-file [opts]
-  (eval-str (a.assoc opts :code (.. "(load \"" opts.file-path "\")"))))
+(fn M.eval-file [opts]
+  (M.eval-str (a.assoc opts :code (.. "(load \"" opts.file-path "\")"))))
 
-(defn interrupt []
+(fn M.interrupt []
   (with-repl-or-warn
     (fn [repl]
-      (log.append [(.. comment-prefix " Sending interrupt signal.")] {:break? true})
-      (repl.send-signal vim.loop.constants.SIGINT))))
+      (log.append [(.. M.comment-prefix " Sending interrupt signal.")] {:break? true})
+      (repl.send-signal :sigint))))
 
-(defn- display-repl-status [status]
+(fn display-repl-status [status]
   (log.append
-    [(.. comment-prefix
-         (cfg [:command])
+    [(.. M.comment-prefix
+         (a.pr-str (cfg [:command]))
          " (" (or status "no status") ")")]
     {:break? true}))
 
-(defn stop []
+(fn M.stop []
   (let [repl (state :repl)]
     (when repl
       (repl.destroy)
       (display-repl-status :stopped)
       (a.assoc (state) :repl nil))))
 
-(defn start []
+(fn M.start []
+  (log.append [(.. M.comment-prefix "Starting snd-s7 client...")])
   (if (state :repl)
-    (log.append [(.. comment-prefix "Can't start, REPL is already running.")
-                 (.. comment-prefix "Stop the REPL with "
+    (log.append [(.. M.comment-prefix "Can't start, REPL is already running.")
+                 (.. M.comment-prefix "Stop the REPL with "
                      (config.get-in [:mapping :prefix])
                      (cfg [:mapping :stop]))]
                 {:break? true})
@@ -133,34 +145,35 @@
 
          :on-exit
          (fn [code signal]
-           (when (and (= :number (type code)) (> code 0))
-             (log.append [(.. comment-prefix "process exited with code " code)]))
-           (when (and (= :number (type signal)) (> signal 0))
-             (log.append [(.. comment-prefix "process exited with signal " signal)]))
-           (stop))
+           (log.dbg "process exited with code " (a.pr-str code))
+           (log.dbg "process exited with signal " (a.pr-str signal))
+           (M.stop))
 
          :on-stray-output
          (fn [msg]
-           (log.append (format-msg msg)))}))))
+           (display-result msg))}))))
 
-(defn on-load []
-  (start))
+(fn M.on-load []
+  (when (config.get-in [:client_on_load])
+  (M.start)))
 
-(defn on-exit []
-  (stop))
+(fn M.on-exit []
+  (M.stop))
 
-(defn on-filetype []
+(fn M.on-filetype []
   (mapping.buf
     :SndStart (cfg [:mapping :start])
-    start
+    #(M.start)
     {:desc "Start the REPL"})
 
   (mapping.buf
     :SndStop (cfg [:mapping :stop])
-    stop
+    #(M.stop)
     {:desc "Stop the REPL"})
 
   (mapping.buf
-    :SdnInterrupt (cfg [:mapping :interrupt])
-    interrupt
-    {:desc "Interrupt the REPL"}))
+    :SndInterrupt (cfg [:mapping :interrupt])
+    #(M.interrupt)
+    {:desc "Interrupt the current REPL"}))
+
+M

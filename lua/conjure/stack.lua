@@ -1,30 +1,18 @@
-local _2afile_2a = "fnl/conjure/stack.fnl"
-local _2amodule_name_2a = "conjure.stack"
-local _2amodule_2a
-do
-  package.loaded[_2amodule_name_2a] = {}
-  _2amodule_2a = package.loaded[_2amodule_name_2a]
-end
-local _2amodule_locals_2a
-do
-  _2amodule_2a["aniseed/locals"] = {}
-  _2amodule_locals_2a = (_2amodule_2a)["aniseed/locals"]
-end
-local autoload = (require("conjure.aniseed.autoload")).autoload
-local a = autoload("conjure.aniseed.core")
-do end (_2amodule_locals_2a)["a"] = a
-local function push(s, v)
+-- [nfnl] fnl/conjure/stack.fnl
+local _local_1_ = require("conjure.nfnl.module")
+local autoload = _local_1_.autoload
+local define = _local_1_.define
+local core = autoload("conjure.nfnl.core")
+local M = define("conjure.stack")
+M.push = function(s, v)
   table.insert(s, v)
   return s
 end
-_2amodule_2a["push"] = push
-local function pop(s)
+M.pop = function(s)
   table.remove(s)
   return s
 end
-_2amodule_2a["pop"] = pop
-local function peek(s)
-  return a.last(s)
+M.peek = function(s)
+  return core.last(s)
 end
-_2amodule_2a["peek"] = peek
-return _2amodule_2a
+return M

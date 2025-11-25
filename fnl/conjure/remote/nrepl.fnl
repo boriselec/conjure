@@ -1,30 +1,31 @@
-(module conjure.remote.nrepl
-  {autoload {a conjure.aniseed.core
-             net conjure.net
-             timer conjure.timer
-             uuid conjure.uuid
-             log conjure.log
-             client conjure.client
-             bencode conjure.remote.transport.bencode}})
+(local {: autoload : define} (require :conjure.nfnl.module))
+(local core (autoload :conjure.nfnl.core))
+(local bencode (autoload :conjure.remote.transport.bencode))
+(local client (autoload :conjure.client))
+(local log (autoload :conjure.log))
+(local net (autoload :conjure.net))
+(local uuid (autoload :conjure.uuid))
 
-(defn with-all-msgs-fn [cb]
+(local M (define :conjure.remote.nrepl))
+
+(fn M.with-all-msgs-fn [cb]
   (let [acc []]
     (fn [msg]
       (table.insert acc msg)
       (when msg.status.done
         (cb acc)))))
 
-(defn enrich-status [msg]
-  (let [ks (a.get msg :status)
+(fn M.enrich-status [msg]
+  (let [ks (core.get msg :status)
         status {}]
-    (a.run!
+    (core.run!
       (fn [k]
-        (a.assoc status k true))
+        (core.assoc status k true))
       ks)
-    (a.assoc msg :status status)
+    (core.assoc msg :status status)
     msg))
 
-(defn connect [opts]
+(fn M.connect [opts]
   "Connects to a remote nREPL server.
   * opts.host: The host string.
   * opts.port: Port as a string.
@@ -46,17 +47,17 @@
 
     (fn send [msg cb]
       (let [msg-id (uuid.v4)]
-        (a.assoc msg :id msg-id)
+        (core.assoc msg :id msg-id)
 
         (if
           (= :no-session msg.session)
-          (a.assoc msg :session nil)
+          (core.assoc msg :session nil)
 
           (and (not msg.session) conn.session)
-          (a.assoc msg :session conn.session))
+          (core.assoc msg :session conn.session))
 
         (log.dbg "send" msg)
-        (a.assoc-in state [:msgs msg-id]
+        (core.assoc-in state [:msgs msg-id]
                     {:msg msg
                      :cb (or cb (fn []))
                      :sent-at (os.time)})
@@ -67,32 +68,35 @@
       (if
         err (opts.on-error err)
         (not chunk) (opts.on-error)
-        (->> (bencode.decode-all state.bc chunk)
-             (a.run!
+        (->> (let [(ok? res) (pcall bencode.decode-all state.bc chunk)]
+               (if ok?
+                 res
+                 (error (.. "conjure.remote.nrepl: Failed to decode message, maybe a different server is running on this port?\n" res))))
+             (core.run!
                (fn [msg]
                  (log.dbg "receive" msg)
-                 (enrich-status msg)
+                 (M.enrich-status msg)
 
                  (let [(ok? err) (pcall opts.side-effect-callback msg)]
                    (when (not ok?)
                      (opts.on-error err)))
 
-                 (let [cb (a.get-in state [:msgs msg.id :cb] opts.default-callback)
+                 (let [cb (core.get-in state [:msgs msg.id :cb] opts.default-callback)
                        (ok? err) (pcall cb msg)]
                    (when (not ok?)
                      (opts.on-error err)))
 
                  (when msg.status.done
-                   (a.assoc-in state [:msgs msg.id] nil))
+                   (core.assoc-in state [:msgs msg.id] nil))
 
                  (opts.on-message msg))))))
 
     (fn process-message-queue []
       (set state.awaiting-process? false)
-      (when (not (a.empty? state.message-queue))
+      (when (not (core.empty? state.message-queue))
         (let [msgs state.message-queue]
           (set state.message-queue [])
-          (a.run!
+          (core.run!
             (fn [args]
               (process-message (unpack args)))
             msgs))))
@@ -114,7 +118,7 @@
               (opts.on-success))))))
 
     (set conn
-         (a.merge!
+         (core.merge!
            conn
            {:send send}
            (net.connect
@@ -123,3 +127,5 @@
               :cb (handle-connect-fn)})))
 
     conn))
+
+M

@@ -1,14 +1,14 @@
-(module conjure.client.janet.stdio
-  {autoload {a conjure.aniseed.core
-             str conjure.aniseed.string
-             nvim conjure.aniseed.nvim
-             stdio conjure.remote.stdio
-             config conjure.config
-             mapping conjure.mapping
-             client conjure.client
-             log conjure.log
-             ts conjure.tree-sitter}
-   require-macros [conjure.macros]})
+(local {: autoload : define} (require :conjure.nfnl.module))
+(local core (autoload :conjure.nfnl.core))
+(local str (autoload :conjure.nfnl.string))
+(local stdio (autoload :conjure.remote.stdio))
+(local config (autoload :conjure.config))
+(local mapping (autoload :conjure.mapping))
+(local client (autoload :conjure.client))
+(local log (autoload :conjure.log))
+(local ts (autoload :conjure.tree-sitter))
+
+(local M (define :conjure.client.janet.stdio))
 
 (config.merge
   {:client
@@ -33,72 +33,70 @@
       ;;:prompt_pattern "(repl|debug\\[[0-9]+\\]):[0-9]+:[^>]*> "
       }}}})
 
-(def- cfg (config.get-in-fn [:client :janet :stdio]))
+(local cfg (config.get-in-fn [:client :janet :stdio]))
+(local state (client.new-state #(do {:repl nil})))
+(set M.buf-suffix ".janet")
+(set M.comment-prefix "# ")
+(set M.form-node? ts.node-surrounded-by-form-pair-chars?)
 
-(defonce- state (client.new-state #(do {:repl nil})))
-
-(def buf-suffix ".janet")
-(def comment-prefix "# ")
-(def form-node? ts.node-surrounded-by-form-pair-chars?)
-
-(defn- with-repl-or-warn [f opts]
+(fn with-repl-or-warn [f opts]
   (let [repl (state :repl)]
     (if repl
       (f repl)
-      (log.append [(.. comment-prefix "No REPL running")]))))
+      (log.append [(.. M.comment-prefix "No REPL running")]))))
 
-(defn unbatch [msgs]
+(fn M.unbatch [msgs]
   {:out (->> msgs
-          (a.map #(or (a.get $1 :out) (a.get $1 :err)))
+          (core.map #(or (core.get $1 :out) (core.get $1 :err)))
           (str.join ""))})
 
-(defn- format-message [msg]
+(fn format-message [msg]
   (->> (str.split msg.out "\n")
-       (a.filter #(~= "" $1))))
+       (core.filter #(~= "" $1))))
 
-(defn- prep-code [s]
+(fn prep-code [s]
   (.. s "\n"))
 
-(defn eval-str [opts]
+(fn M.eval-str [opts]
   (with-repl-or-warn
     (fn [repl]
       (repl.send
         (prep-code opts.code)
         (fn [msgs]
-          (let [lines (-> msgs unbatch format-message)]
+          (let [lines (-> msgs M.unbatch format-message)]
             (when opts.on-result
-              (opts.on-result (a.last lines)))
+              (opts.on-result (core.last lines)))
             (log.append lines)))
         {:batch? true}))))
 
-(defn eval-file [opts]
-  (eval-str (a.assoc opts :code (a.slurp opts.file-path))))
+(fn M.eval-file [opts]
+  (M.eval-str (core.assoc opts :code (core.slurp opts.file-path))))
 
-(defn doc-str [opts]
-  (eval-str (a.update opts :code #(.. "(doc " $1 ")"))))
+(fn M.doc-str [opts]
+  (M.eval-str (core.update opts :code #(.. "(doc " $1 ")"))))
 
-(defn- display-repl-status [status]
+(fn display-repl-status [status]
   (let [repl (state :repl)]
     (when repl
       (log.append
-        [(.. comment-prefix (a.pr-str (a.get-in repl [:opts :cmd])) " (" status ")")]
+        [(.. M.comment-prefix (core.pr-str (core.get-in repl [:opts :cmd])) " (" status ")")]
         {:break? true}))))
 
-(defn stop []
+(fn M.stop []
   (let [repl (state :repl)]
     (when repl
       (repl.destroy)
       (display-repl-status :stopped)
-      (a.assoc (state) :repl nil))))
+      (core.assoc (state) :repl nil))))
 
-(defn start []
+(fn M.start []
   (if (state :repl)
-    (log.append [(.. comment-prefix "Can't start, REPL is already running.")
-                 (.. comment-prefix "Stop the REPL with "
+    (log.append [(.. M.comment-prefix "Can't start, REPL is already running.")
+                 (.. M.comment-prefix "Stop the REPL with "
                      (config.get-in [:mapping :prefix])
                      (cfg [:mapping :stop]))]
                 {:break? true})
-    (a.assoc
+    (core.assoc
       (state) :repl
       (stdio.start
         {:prompt-pattern (cfg [:prompt_pattern])
@@ -115,29 +113,30 @@
          :on-exit
          (fn [code signal]
            (when (and (= :number (type code)) (> code 0))
-             (log.append [(.. comment-prefix "process exited with code " code)]))
+             (log.append [(.. M.comment-prefix "process exited with code " code)]))
            (when (and (= :number (type signal)) (> signal 0))
-             (log.append [(.. comment-prefix "process exited with signal " signal)]))
-           (stop))
+             (log.append [(.. M.comment-prefix "process exited with signal " signal)]))
+           (M.stop))
 
          :on-stray-output
          (fn [msg]
            (log.append (format-message msg)))}))))
 
-(defn on-load []
-  (start))
+(fn M.on-load []
+  (M.start))
 
-(defn on-filetype []
+(fn M.on-filetype []
   (mapping.buf
     :JanetStart (cfg [:mapping :start])
-    start
+    #(M.start)
     {:desc "Start the REPL"})
 
   (mapping.buf
     :JanetStop (cfg [:mapping :stop])
-    stop
+    #(M.stop)
     {:desc "Stop the REPL"}))
 
-(defn on-exit []
-  (stop))
+(fn M.on-exit []
+  (M.stop))
 
+M

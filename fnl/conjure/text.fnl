@@ -1,52 +1,55 @@
-(module conjure.text
-  {require {a conjure.aniseed.core
-            str conjure.aniseed.string}})
+(local {: autoload : define} (require :conjure.nfnl.module))
+(local core (autoload :conjure.nfnl.core))
+(local str (autoload :conjure.nfnl.string))
 
-(defn trailing-newline? [s]
+(local M (define :conjure.text))
+
+(fn M.trailing-newline? [s]
   (string.match s "\r?\n$"))
 
-(defn trim-last-newline [s]
+(fn M.trim-last-newline [s]
   (string.gsub s "\r?\n$" ""))
 
-(defn left-sample [s limit]
+(fn M.left-sample [s limit]
   (let [flat (-> (string.gsub s "\n" " ")
                  (string.gsub "%s+" " ")
                  (str.trim))]
-    (if (>= limit (a.count flat))
+    (if (>= limit (core.count flat))
       flat
-      (.. (string.sub flat 0 (a.dec limit)) "..."))))
+      (.. (string.sub flat 0 (core.dec limit)) "..."))))
 
-(defn right-sample [s limit]
-  (string.reverse (left-sample (string.reverse s) limit)))
+(fn M.right-sample [s limit]
+  (string.reverse (M.left-sample (string.reverse s) limit)))
 
-(defn split-lines [s]
+(fn M.split-lines [s]
   (str.split s "\r?\n"))
 
-(defn prefixed-lines [s prefix opts]
-  (->> (split-lines s)
-       (a.map-indexed
+(fn M.prefixed-lines [s prefix opts]
+  (->> (M.split-lines s)
+       (core.map-indexed
          (fn [[n line]]
            (if (and (= 1 n)
-                    (a.get opts :skip-first?))
+                    (core.get opts :skip-first?))
              line
              (.. prefix line))))))
 
-(defn starts-with [str start]
-  (when str
-    (= (string.sub str 1 (a.count start)) start)))
+(fn M.starts-with [str start]
+  (when (and str start)
+    (vim.startswith str start)))
 
-(defn ends-with [str end]
-  (when str
-    (or (= end "") (= end (string.sub str (- (a.count end)))))))
+(fn M.ends-with [str end]
+  (when (and str end)
+    (or (= end "")
+        (vim.endswith str end))))
 
-(defn first-and-last-chars [str]
+(fn M.first-and-last-chars [str]
   (when str
-    (if (> (a.count str) 1)
+    (if (> (core.count str) 1)
       (.. (string.sub str 1 1)
           (string.sub str -1 -1))
       str)))
 
-(defn strip-ansi-escape-sequences [s]
+(fn M.strip-ansi-escape-sequences [s]
   (-> s
       (string.gsub "\x1b%[%d+;%d+;%d+;%d+;%d+m" "")
       (string.gsub "\x1b%[%d+;%d+;%d+;%d+m" "")
@@ -54,13 +57,15 @@
       (string.gsub "\x1b%[%d+;%d+m" "")
       (string.gsub "\x1b%[%d+m" "")))
 
-(defn chars [s]
+(fn M.chars [s]
   (local res [])
   (when s
     (each [c (string.gmatch s ".")]
       (table.insert res c)))
   res)
 
-(defn upper-first [s]
+(fn M.upper-first [s]
   (when s
     (s:gsub "^%l" string.upper)))
+
+M

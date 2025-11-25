@@ -1,39 +1,39 @@
-(module conjure.remote.stdio-rt
-  {autoload {a conjure.aniseed.core
-             nvim conjure.aniseed.nvim
-             str conjure.aniseed.string
-             client conjure.client
-             log conjure.log}})
+(local {: autoload : define} (require :conjure.nfnl.module))
+(local core (autoload :conjure.nfnl.core))
+(local str (autoload :conjure.nfnl.string))
+(local client (autoload :conjure.client))
+(local log (autoload :conjure.log))
 
-(def- uv vim.loop)
+(local M (define :conjure.remote.stdio-rt))
+(local uv vim.uv)
 
-(defn- parse-prompt [s pat]
+(fn parse-prompt [s pat]
   (if (s:find pat)
     (values true (s:gsub pat ""))
     (values false s)))
 
-(defn parse-cmd [x]
+(fn M.parse-cmd [x]
   (if
-    (a.table? x)
-    {:cmd (a.first x)
-     :args (a.rest x)}
+    (core.table? x)
+    {:cmd (core.first x)
+     :args (core.rest x)}
 
-    (a.string? x)
-    (parse-cmd (str.split x "%s"))))
+    (core.string? x)
+    (M.parse-cmd (str.split x "%s"))))
 
-(defn- extend-env [vars]
-  (->> (a.merge
-         (nvim.fn.environ)
+(fn extend-env [vars]
+  (->> (core.merge
+         (vim.fn.environ)
          vars)
-       (a.kv-pairs)
-       (a.map
+       (core.kv-pairs)
+       (core.map
          (fn [[k v]]
            (.. k "=" v)))))
 
 ; This function sets up internal functions before spawning a child
 ; process to run the repl. It's called by a client to start a repl
 ; and returns a modified repl table.
-(defn start [opts]
+(fn M.start [opts]
   "Starts an external REPL and gives you hooks to send code to it and read
   responses back out. Tying an input to a result is near enough impossible
   through this stdio medium, so it's a best effort.
@@ -54,7 +54,7 @@
                :current nil})
 
     (fn destroy []
-      ;; https://teukka.tech/vimloop.html
+      ;; https://teukkcore.tech/vimloop.html
       (pcall #(stdout:read_stop))
       (pcall #(stderr:read_stop))
       (pcall #(stdout:close))
@@ -73,10 +73,10 @@
       (client.schedule opts.on-exit code signal))
 
     (fn next-in-queue []
-      (let [next-msg (a.first repl.queue)]
+      (let [next-msg (core.first repl.queue)]
         (when next-msg
           (table.remove repl.queue 1)
-          (a.assoc repl :current next-msg)
+          (core.assoc repl :current next-msg)
           (log.dbg "send" next-msg.code)
           (stdin:write next-msg.code))))
 
@@ -88,12 +88,12 @@
           (destroy))
         (when chunk
           (let [(done? result) (parse-prompt chunk opts.prompt-pattern)
-                cb (a.get-in repl [:current :cb] opts.on-stray-output)]
+                cb (core.get-in repl [:current :cb] opts.on-stray-output)]
             (when cb
               (pcall #(cb {source result
                            :done? done?})))
             (when done? ; never gets here because done? is always false
-              (a.assoc repl :current nil)
+              (core.assoc repl :current nil)
               (next-in-queue))))))
 
     (fn on-stdout [err chunk]
@@ -108,7 +108,7 @@
       (table.insert
         repl.queue
         {:code code
-         :cb (if (a.get opts :batch?)
+         :cb (if (core.get opts :batch?)
                (let [msgs []]
                  (fn [msg]
                    (table.insert msgs msg)
@@ -122,12 +122,12 @@
       (uv.process_kill repl.handle signal)
       nil)
 
-    (let [{: cmd : args} (parse-cmd opts.cmd)
+    (let [{: cmd : args} (M.parse-cmd opts.cmd)
           (handle pid-or-err)
           (uv.spawn cmd {:stdio [stdin stdout stderr]
                          :args args
                          :env (extend-env
-                                (a.merge!
+                                (core.merge!
                                   ;; Trying to disable custom readline config.
                                   ;; Doesn't work in practice but is probably close?
                                   ;; If you know how, please open a PR!
@@ -140,7 +140,7 @@
           (stdout:read_start (client.schedule-wrap on-stdout))
           (stderr:read_start (client.schedule-wrap on-stderr))
           (client.schedule #(opts.on-success))
-          (a.merge!
+          (core.merge!
             repl
             {:handle handle
              :pid pid-or-err
@@ -151,3 +151,5 @@
         (do
           (client.schedule #(opts.on-error pid-or-err))
           (destroy))))))
+
+M

@@ -1,5 +1,9 @@
-; ((. (require :nfnl.config) :default))
+(local core (require :conjure.nfnl.core))
+(local config (require :conjure.nfnl.config))
+(local defaults (config.default))
 
-;; Restricting to dir local config for now, will be expanded to the rest of the
-;; repo eventually.
-{:source-file-patterns [".nvim.fnl"]}
+{:compiler-options (core.merge
+                     defaults.compiler-options
+                     {:compilerEnv _G})
+ :source-file-patterns [".nvim.fnl" "plugin/*.fnl" "fnl/**/*.fnl"]
+ :orphan-detection {:ignore-patterns ["lua/conjure/nfnl/"]}}

@@ -1,71 +1,77 @@
-(module conjure.config
-  {autoload {nvim conjure.aniseed.nvim
-             a conjure.aniseed.core
-             str conjure.aniseed.string}})
+(local {: autoload : define} (require :conjure.nfnl.module))
+(local core (autoload :conjure.nfnl.core))
+(local str (autoload :conjure.nfnl.string))
 
-(defn- ks->var [ks]
+(local M (define :conjure.config))
+
+(fn ks->var [ks]
   (.. "conjure#" (str.join "#" ks)))
 
-(defn get-in [ks]
+(fn M.get-in [ks]
   (let [key (ks->var ks)
-        v (or (a.get nvim.b key) (a.get nvim.g key))]
-    (if (and (a.table? v)
-             (a.get v vim.type_idx)
-             (a.get v vim.val_idx))
-      (a.get v vim.val_idx)
+        v (or (core.get vim.b key) (core.get vim.g key))]
+    (if (and (core.table? v)
+             (core.get v vim.type_idx)
+             (core.get v vim.val_idx))
+      (core.get v vim.val_idx)
       v)))
 
-(defn filetypes []
-  (get-in [:filetypes]))
+(fn M.filetypes []
+  (M.get-in [:filetypes]))
 
-(defn get-in-fn [prefix-ks]
+(fn M.get-in-fn [prefix-ks]
   (fn [ks]
-    (get-in (a.concat prefix-ks ks))))
+    (M.get-in (core.concat prefix-ks ks))))
 
-(defn assoc-in [ks v]
-  (a.assoc nvim.g (ks->var ks) v)
+(fn M.assoc-in [ks v]
+  (core.assoc vim.g (ks->var ks) v)
   v)
 
-(defn merge [tbl opts ks]
+(fn M.merge [tbl opts ks]
   "Merge a table into the config recursively. Won't overwrite any existing
   value by default, set opts.overwrite? to true if this is desired."
   (let [ks (or ks [])
         opts (or opts {})]
-    (a.run!
+    (core.run!
       (fn [[k v]]
-        (let [ks (a.concat ks [k])
-              current (get-in ks)]
+        (let [ks (core.concat ks [k])
+              current (M.get-in ks)]
 
           ;; Is it an associative table?
-          (if (and (a.table? v) (not (a.get v 1)))
+          (if (and (core.table? v) (not (core.get v 1)))
             ;; Recur if so.
-            (merge v opts ks)
+            (M.merge v opts ks)
 
             ;; Otherwise we're at a value and we can assoc it.
-            (when (or (a.nil? current) opts.overwrite?)
-              (assoc-in ks v)))))
-      (a.kv-pairs tbl))
+            (when (or (core.nil? current) opts.overwrite?)
+              (M.assoc-in ks v)))))
+      (core.kv-pairs tbl))
     nil))
 
-(merge
+(M.merge
   {:debug false
    :relative_file_root nil
    :path_subs nil
    :client_on_load true
 
-   :filetypes [:clojure :fennel :janet :hy :julia :racket :scheme :lua :lisp :python :rust :sql]
+   :filetypes [:clojure :fennel :janet :javascript :hy :julia :racket :scheme 
+               :lua :lisp :python :rust :sql :typescript :php :r]
    :filetype {:clojure :conjure.client.clojure.nrepl
-              :fennel :conjure.client.fennel.aniseed
+              :fennel :conjure.client.fennel.nfnl
               :janet :conjure.client.janet.netrepl
               :hy :conjure.client.hy.stdio
               :julia :conjure.client.julia.stdio
+              :javascript :conjure.client.javascript.stdio
               :racket :conjure.client.racket.stdio
               :scheme :conjure.client.scheme.stdio
               :lua :conjure.client.lua.neovim
               :lisp :conjure.client.common-lisp.swank
               :python :conjure.client.python.stdio
+              :r :conjure.client.r.stdio
               :rust :conjure.client.rust.evcxr
-              :sql :conjure.client.sql.stdio}
+              :sql :conjure.client.sql.stdio
+              :typescript :conjure.client.javascript.stdio
+              :php :conjure.client.php.psysh}
    :filetype_suffixes {:racket [:rkt]
                        :scheme [:scm :ss]}
 
@@ -95,16 +101,20 @@
    {:wrap false
     :diagnostics false
     :treesitter true
+    :auto_flush_interval_ms 100
+    :split {:width nil
+            :height nil}
     :hud {:width 0.42
           :height 0.3
           :zindex 1
           :enabled true
           :passive_close_delay 0
-          :minimum_lifetime_ms 20
+          :minimum_lifetime_ms 250
           :overlap_padding 0.1
           :border :single
           :anchor :NE
-          :ignore_low_priority false}
+          :ignore_low_priority false
+          :open_when :last-log-line-not-visible}
     :botright false
     :jump_to_latest {:enabled false
                      :cursor_scroll_position "top"}
@@ -118,7 +128,7 @@
                     :end "}%~~~"}}}
 
    :extract
-   {:context_header_lines 24
+   {:context_header_lines -1
     :form_pairs [["(" ")"]
                  ["{" "}"]
                  ["[" "]" true]]
@@ -127,8 +137,8 @@
    :preview
    {:sample_limit 0.3}})
 
-(when (get-in [:mapping :enable_defaults])
-  (merge
+(when (M.get-in [:mapping :enable_defaults])
+  (M.merge
     {:mapping
      {:log_split "ls"
       :log_vsplit "lv"
@@ -158,3 +168,5 @@
       :eval_previous "ep"
       :def_word "gd"
       :doc_word ["K"]}}))
+
+M

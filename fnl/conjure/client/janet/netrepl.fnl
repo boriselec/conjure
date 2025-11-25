@@ -1,19 +1,19 @@
-(module conjure.client.janet.netrepl
-  {autoload {a conjure.aniseed.core
-             nvim conjure.aniseed.nvim
-             bridge conjure.bridge
-             mapping conjure.mapping
-             text conjure.text
-             log conjure.log
-             config conjure.config
-             client conjure.client
-             remote conjure.remote.netrepl
-             ts conjure.tree-sitter}})
+(local {: autoload : define} (require :conjure.nfnl.module))
+(local core (autoload :conjure.nfnl.core))
+(local client (autoload :conjure.client))
+(local config (autoload :conjure.config))
+(local log (autoload :conjure.log))
+(local mapping (autoload :conjure.mapping))
+(local remote (autoload :conjure.remote.netrepl))
+(local text (autoload :conjure.text))
+(local ts (autoload :conjure.tree-sitter))
 
-(def buf-suffix ".janet")
-(def comment-prefix "# ")
-(def form-node? ts.node-surrounded-by-form-pair-chars?)
-(def comment-node? ts.lisp-comment-node?)
+(local M (define :conjure.client.janet.netrepl))
+
+(set M.buf-suffix ".janet")
+(set M.comment-prefix "# ")
+(set M.form-node? ts.node-surrounded-by-form-pair-chars?)
+(set M.comment-node? ts.lisp-comment-node?)
 
 (config.merge
   {:client
@@ -30,34 +30,34 @@
        {:mapping {:connect "cc"
                   :disconnect "cd"}}}}}))
 
-(defonce- state (client.new-state #(do {:conn nil})))
+(local state (client.new-state #(do {:conn nil})))
 
-(defn- with-conn-or-warn [f opts]
+(fn with-conn-or-warn [f opts]
   (let [conn (state :conn)]
     (if conn
       (f conn)
       (log.append ["# No connection"]))))
 
-(defn- connected? []
+(fn connected? []
   (if (state :conn)
     true
     false))
 
-(defn- display-conn-status [status]
+(fn display-conn-status [status]
   (with-conn-or-warn
     (fn [conn]
       (log.append
         [(.. "# " conn.host ":" conn.port " (" status ")")]
         {:break? true}))))
 
-(defn disconnect []
+(fn M.disconnect []
   (with-conn-or-warn
     (fn [conn]
       (conn.destroy)
       (display-conn-status :disconnected)
-      (a.assoc (state) :conn nil))))
+      (core.assoc (state) :conn nil))))
 
-(defn- send [opts]
+(fn send [opts]
   (let [{: msg : cb : row : col : file-path} opts]
     (with-conn-or-warn
       (fn [conn]
@@ -69,13 +69,13 @@
                      nil true)
         (remote.send conn msg cb true)))))
 
-(defn connect [opts]
+(fn M.connect [opts]
   (let [opts (or opts {})
         host (or opts.host (config.get-in [:client :janet :netrepl :connection :default_host]))
         port (or opts.port (config.get-in [:client :janet :netrepl :connection :default_port]))]
 
     (when (state :conn)
-      (disconnect))
+      (M.disconnect))
 
     (local conn
       (remote.connect
@@ -85,24 +85,24 @@
          :on-failure
          (fn [err]
            (display-conn-status err)
-           (disconnect))
+           (M.disconnect))
 
          :on-success
          (fn []
-           (a.assoc (state) :conn conn)
+           (core.assoc (state) :conn conn)
            (display-conn-status :connected))
 
          :on-error
          (fn [err]
            (if err
              (display-conn-status err)
-             (disconnect)))}))))
+             (M.disconnect)))}))))
 
-(defn- try-ensure-conn []
+(fn try-ensure-conn []
   (when (not (connected?))
-    (connect {:silent? true})))
+    (M.connect {:silent? true})))
 
-(defn eval-str [opts]
+(fn M.eval-str [opts]
   (try-ensure-conn)
   (send
     {:msg (.. opts.code "\n")
@@ -114,35 +114,37 @@
                (opts.on-result (text.strip-ansi-escape-sequences clean)))
              (when (not opts.passive?)
                (log.append (text.split-lines clean)))))
-     :row (a.get-in opts.range [:start 1] 1)
-     :col (a.get-in opts.range [:start 2] 1)
+     :row (core.get-in opts.range [:start 1] 1)
+     :col (core.get-in opts.range [:start 2] 1)
      :file-path opts.file-path}))
 
-(defn doc-str [opts]
+(fn M.doc-str [opts]
   (try-ensure-conn)
-  (eval-str (a.update opts :code #(.. "(doc " $1 ")"))))
+  (M.eval-str (core.update opts :code #(.. "(doc " $1 ")"))))
 
-(defn eval-file [opts]
+(fn M.eval-file [opts]
   (try-ensure-conn)
-  (eval-str
-    (a.assoc opts :code (.. "(do (dofile \"" opts.file-path
+  (M.eval-str
+    (core.assoc opts :code (.. "(do (dofile \"" opts.file-path
                             "\" :env (fiber/getenv (fiber/current))) nil)"))))
 
-(defn on-filetype []
+(fn M.on-filetype []
   (mapping.buf
     :JanetDisconnect
     (config.get-in [:client :janet :netrepl :mapping :disconnect])
-    disconnect
+    #(M.disconnect)
     {:desc "Disconnect from the REPL"})
 
   (mapping.buf
     :JanetConnect
     (config.get-in [:client :janet :netrepl :mapping :connect])
-    #(connect)
+    #(M.connect)
     {:desc "Connect to a REPL"}))
 
-(defn on-load []
-  (connect {}))
+(fn M.on-load []
+  (M.connect {}))
 
-(defn on-exit []
-  (disconnect))
+(fn M.on-exit []
+  (M.disconnect))
+
+M

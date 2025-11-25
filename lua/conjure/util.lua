@@ -1,27 +1,28 @@
-local _2afile_2a = "fnl/conjure/util.fnl"
-local _2amodule_name_2a = "conjure.util"
-local _2amodule_2a
-do
-  package.loaded[_2amodule_name_2a] = {}
-  _2amodule_2a = package.loaded[_2amodule_name_2a]
-end
-local _2amodule_locals_2a
-do
-  _2amodule_2a["aniseed/locals"] = {}
-  _2amodule_locals_2a = (_2amodule_2a)["aniseed/locals"]
-end
-local autoload = (require("conjure.aniseed.autoload")).autoload
-local nvim = autoload("conjure.aniseed.nvim")
-do end (_2amodule_locals_2a)["nvim"] = nvim
-local function wrap_require_fn_call(mod, f)
-  local function _1_()
+-- [nfnl] fnl/conjure/util.fnl
+local _local_1_ = require("conjure.nfnl.module")
+local autoload = _local_1_.autoload
+local define = _local_1_.define
+local a = autoload("conjure.nfnl.core")
+local M = define("conjure.util")
+M["wrap-require-fn-call"] = function(mod, f)
+  local function _2_()
     return require(mod)[f]()
   end
-  return _1_
+  return _2_
 end
-_2amodule_2a["wrap-require-fn-call"] = wrap_require_fn_call
-local function replace_termcodes(s)
-  return nvim.replace_termcodes(s, true, false, true)
+M["replace-termcodes"] = function(s)
+  return vim.api.nvim_replace_termcodes(s, true, false, true)
 end
-_2amodule_2a["replace-termcodes"] = replace_termcodes
-return _2amodule_2a
+M["ordered-distinct"] = function(l)
+  local seen = {}
+  local result = {}
+  for _, v in ipairs(l) do
+    if not a.get(seen, v) then
+      a.assoc(seen, v, true)
+      table.insert(result, v)
+    else
+    end
+  end
+  return result
+end
+return M

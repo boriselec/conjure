@@ -1,27 +1,17 @@
-local _2afile_2a = "fnl/conjure/remote/nrepl.fnl"
-local _2amodule_name_2a = "conjure.remote.nrepl"
-local _2amodule_2a
-do
-  package.loaded[_2amodule_name_2a] = {}
-  _2amodule_2a = package.loaded[_2amodule_name_2a]
-end
-local _2amodule_locals_2a
-do
-  _2amodule_2a["aniseed/locals"] = {}
-  _2amodule_locals_2a = (_2amodule_2a)["aniseed/locals"]
-end
-local autoload = (require("conjure.aniseed.autoload")).autoload
-local a, bencode, client, log, net, timer, uuid = autoload("conjure.aniseed.core"), autoload("conjure.remote.transport.bencode"), autoload("conjure.client"), autoload("conjure.log"), autoload("conjure.net"), autoload("conjure.timer"), autoload("conjure.uuid")
-do end (_2amodule_locals_2a)["a"] = a
-_2amodule_locals_2a["bencode"] = bencode
-_2amodule_locals_2a["client"] = client
-_2amodule_locals_2a["log"] = log
-_2amodule_locals_2a["net"] = net
-_2amodule_locals_2a["timer"] = timer
-_2amodule_locals_2a["uuid"] = uuid
-local function with_all_msgs_fn(cb)
+-- [nfnl] fnl/conjure/remote/nrepl.fnl
+local _local_1_ = require("conjure.nfnl.module")
+local autoload = _local_1_.autoload
+local define = _local_1_.define
+local core = autoload("conjure.nfnl.core")
+local bencode = autoload("conjure.remote.transport.bencode")
+local client = autoload("conjure.client")
+local log = autoload("conjure.log")
+local net = autoload("conjure.net")
+local uuid = autoload("conjure.uuid")
+local M = define("conjure.remote.nrepl")
+M["with-all-msgs-fn"] = function(cb)
   local acc = {}
-  local function _1_(msg)
+  local function _2_(msg)
     table.insert(acc, msg)
     if msg.status.done then
       return cb(acc)
@@ -29,37 +19,39 @@ local function with_all_msgs_fn(cb)
       return nil
     end
   end
-  return _1_
+  return _2_
 end
-_2amodule_2a["with-all-msgs-fn"] = with_all_msgs_fn
-local function enrich_status(msg)
-  local ks = a.get(msg, "status")
+M["enrich-status"] = function(msg)
+  local ks = core.get(msg, "status")
   local status = {}
-  local function _3_(k)
-    return a.assoc(status, k, true)
+  local function _4_(k)
+    return core.assoc(status, k, true)
   end
-  a["run!"](_3_, ks)
-  a.assoc(msg, "status", status)
+  core["run!"](_4_, ks)
+  core.assoc(msg, "status", status)
   return msg
 end
-_2amodule_2a["enrich-status"] = enrich_status
-local function connect(opts)
+M.connect = function(opts)
   local state = {["message-queue"] = {}, bc = bencode.new(), msgs = {}, ["awaiting-process?"] = false}
   local conn = {session = nil, state = state}
   local function send(msg, cb)
     local msg_id = uuid.v4()
-    a.assoc(msg, "id", msg_id)
+    core.assoc(msg, "id", msg_id)
     if ("no-session" == msg.session) then
-      a.assoc(msg, "session", nil)
+      core.assoc(msg, "session", nil)
     elseif (not msg.session and conn.session) then
-      a.assoc(msg, "session", conn.session)
+      core.assoc(msg, "session", conn.session)
     else
     end
     log.dbg("send", msg)
-    local function _5_()
+    local or_6_ = cb
+    if not or_6_ then
+      local function _7_()
+      end
+      or_6_ = _7_
     end
-    a["assoc-in"](state, {"msgs", msg_id}, {msg = msg, cb = (cb or _5_), ["sent-at"] = os.time()})
-    do end (conn.sock):write(bencode.encode(msg))
+    core["assoc-in"](state, {"msgs", msg_id}, {msg = msg, cb = or_6_, ["sent-at"] = os.time()})
+    conn.sock:write(bencode.encode(msg))
     return nil
   end
   local function process_message(err, chunk)
@@ -68,9 +60,9 @@ local function connect(opts)
     elseif not chunk then
       return opts["on-error"]()
     else
-      local function _6_(msg)
+      local function _8_(msg)
         log.dbg("receive", msg)
-        enrich_status(msg)
+        M["enrich-status"](msg)
         do
           local ok_3f, err0 = pcall(opts["side-effect-callback"], msg)
           if not ok_3f then
@@ -79,7 +71,7 @@ local function connect(opts)
           end
         end
         do
-          local cb = a["get-in"](state, {"msgs", msg.id, "cb"}, opts["default-callback"])
+          local cb = core["get-in"](state, {"msgs", msg.id, "cb"}, opts["default-callback"])
           local ok_3f, err0 = pcall(cb, msg)
           if not ok_3f then
             opts["on-error"](err0)
@@ -87,23 +79,31 @@ local function connect(opts)
           end
         end
         if msg.status.done then
-          a["assoc-in"](state, {"msgs", msg.id}, nil)
+          core["assoc-in"](state, {"msgs", msg.id}, nil)
         else
         end
         return opts["on-message"](msg)
       end
-      return a["run!"](_6_, bencode["decode-all"](state.bc, chunk))
+      local function _12_()
+        local ok_3f, res = pcall(bencode["decode-all"], state.bc, chunk)
+        if ok_3f then
+          return res
+        else
+          return error(("conjure.remote.nrepl: Failed to decode message, maybe a different server is running on this port?\n" .. res))
+        end
+      end
+      return core["run!"](_8_, _12_())
     end
   end
   local function process_message_queue()
     state["awaiting-process?"] = false
-    if not a["empty?"](state["message-queue"]) then
+    if not core["empty?"](state["message-queue"]) then
       local msgs = state["message-queue"]
       state["message-queue"] = {}
-      local function _11_(args)
+      local function _15_(args)
         return process_message(unpack(args))
       end
-      return a["run!"](_11_, msgs)
+      return core["run!"](_15_, msgs)
     else
       return nil
     end
@@ -118,18 +118,17 @@ local function connect(opts)
     end
   end
   local function handle_connect_fn()
-    local function _14_(err)
+    local function _18_(err)
       if err then
         return opts["on-failure"](err)
       else
-        do end (conn.sock):read_start(client.wrap(enqueue_message))
+        conn.sock:read_start(client.wrap(enqueue_message))
         return opts["on-success"]()
       end
     end
-    return client["schedule-wrap"](_14_)
+    return client["schedule-wrap"](_18_)
   end
-  conn = a["merge!"](conn, {send = send}, net.connect({host = opts.host, port = opts.port, cb = handle_connect_fn()}))
+  conn = core["merge!"](conn, {send = send}, net.connect({host = opts.host, port = opts.port, cb = handle_connect_fn()}))
   return conn
 end
-_2amodule_2a["connect"] = connect
-return _2amodule_2a
+return M

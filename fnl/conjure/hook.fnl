@@ -1,25 +1,29 @@
-(module conjure.hook
-  {autoload {a conjure.aniseed.core
-             str conjure.aniseed.string}})
+(local {: autoload : define} (require :conjure.nfnl.module))
+(local core (autoload :conjure.nfnl.core))
+(local str (autoload :conjure.nfnl.string))
+
+(local M (define :conjure.hook))
 
 ;; These are originals defined by Conjure.
-(defonce hook-fns {})
+(set M.hook-fns (or M.hook-fns {}))
 
 ;; These are user defined overrides.
-(defonce hook-override-fns {})
+(set M.hook-override-fns (or M.hook-override-fns {}))
 
-(defn define [name f]
-  (a.assoc hook-fns name f))
+(fn M.define [name f]
+  (core.assoc M.hook-fns name f))
 
-(defn override [name f]
-  (a.assoc hook-override-fns name f))
+(fn M.override [name f]
+  (core.assoc M.hook-override-fns name f))
 
-(defn get [name]
-  (a.get hook-fns name))
+(fn M.get [name]
+  (core.get M.hook-fns name))
 
-(defn exec [name ...]
-  (let [f (or (a.get hook-override-fns name)
-              (a.get hook-fns name))]
+(fn M.exec [name ...]
+  (let [f (or (core.get M.hook-override-fns name)
+              (core.get M.hook-fns name))]
     (if f
       (f ...)
       (error (str.join " " ["conjure.hook: Hook not found, can not exec" name])))))
+
+M

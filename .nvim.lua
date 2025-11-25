@@ -1,5 +1,10 @@
--- [nfnl] Compiled from .nvim.fnl by https://github.com/Olical/nfnl, do not edit.
-vim.g["conjure#client#clojure#nrepl#refresh#backend"] = "clj-reload"
+-- [nfnl] .nvim.fnl
+local _local_1_ = require("nfnl.module")
+local autoload = _local_1_.autoload
+local reload = autoload("plenary.reload")
+local notify = autoload("nfnl.notify")
+vim.g["conjure#client#scheme#stdio#command"] = "chicken-csi -:c"
+vim.g["conjure#client#scheme#stdio#prompt_pattern"] = "\n-#;%d-> "
+vim.g["conjure#client#scheme#stdio#value_prefix_pattern"] = false
 package.path = (package.path .. ";test/lua/?.lua")
---[[ (nvim.ex.augroup "conjure_set_state_key_on_dir_changed") (nvim.ex.autocmd_) (nvim.ex.autocmd "DirChanged * call luaeval(\"require('conjure.client')['set-state-key!']('\" . getcwd() . \"')\")") (nvim.ex.augroup "END") ]]
 return nil

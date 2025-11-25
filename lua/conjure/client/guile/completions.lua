@@ -1,0 +1,42 @@
+-- [nfnl] fnl/conjure/client/guile/completions.fnl
+local _local_1_ = require("conjure.nfnl.module")
+local autoload = _local_1_.autoload
+local define = _local_1_.define
+local a = autoload("conjure.nfnl.core")
+local keywords = autoload("conjure.client.scheme.keywords")
+local util = autoload("conjure.util")
+local tsc = autoload("conjure.tree-sitter-completions")
+local res = autoload("conjure.resources")
+local M = define("conjure.client.guile.completions")
+M["guile-repl-completion-code"] = res["get-resource-contents"]("client/guile/completion.scm")
+M["build-completion-request"] = function(prefix)
+  return ("(%conjure:get-guile-completions " .. a["pr-str"](prefix) .. ")")
+end
+local function parse_guile_completion_result(rs)
+  local tbl_26_ = {}
+  local i_27_ = 0
+  for token in string.gmatch(rs, "\"([^\"^%s]+)\"") do
+    local val_28_ = token
+    if (nil ~= val_28_) then
+      i_27_ = (i_27_ + 1)
+      tbl_26_[i_27_] = val_28_
+    else
+    end
+  end
+  return tbl_26_
+end
+M["format-results"] = function(rs)
+  local cmpls = parse_guile_completion_result(rs)
+  local last = table.remove(cmpls)
+  table.insert(cmpls, 1, last)
+  return cmpls
+end
+M["get-static-completions"] = function(prefix)
+  local keyword_set = keywords["get-set"]("guile")
+  local ts_completions = tsc["get-completions-at-cursor"]("scheme", "scheme")
+  local all_cmpl = a.concat(ts_completions, keyword_set)
+  local distinct_cmpl = util["ordered-distinct"](all_cmpl)
+  local prefix_filter = tsc["make-prefix-filter"](prefix)
+  return prefix_filter(distinct_cmpl)
+end
+return M

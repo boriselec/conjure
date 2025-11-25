@@ -1,22 +1,25 @@
-(module conjure.client.guile.socket
-  {autoload {a conjure.aniseed.core
-             str conjure.aniseed.string
-             nvim conjure.aniseed.nvim
-             socket conjure.remote.socket
-             config conjure.config
-             text conjure.text
-             mapping conjure.mapping
-             client conjure.client
-             log conjure.log
-             extract conjure.extract
-             ts conjure.tree-sitter}
-   require-macros [conjure.macros]})
+(local {: autoload : define} (require :conjure.nfnl.module))
+(local a (autoload :conjure.nfnl.core))
+(local client (autoload :conjure.client))
+(local config (autoload :conjure.config))
+(local log (autoload :conjure.log))
+(local mapping (autoload :conjure.mapping))
+(local socket (autoload :conjure.remote.socket))
+(local str (autoload :conjure.nfnl.string))
+(local text (autoload :conjure.text))
+(local ts (autoload :conjure.tree-sitter))
+(local cmpl (autoload :conjure.client.guile.completions))
+(local util (autoload :conjure.util))
+
+(local M (define :conjure.client.guile.socket))
 
 (config.merge
   {:client
    {:guile
     {:socket
-     {:pipename nil}}}})
+     {:pipename nil
+      :host_port nil
+      :enable_completions true}}}})
 
 (when (config.get-in [:mapping :enable_defaults])
   (config.merge
@@ -26,22 +29,41 @@
        {:mapping {:connect "cc"
                   :disconnect "cd"}}}}}))
 
-(def- cfg (config.get-in-fn [:client :guile :socket]))
+(local cfg (config.get-in-fn [:client :guile :socket]))
+(local state (client.new-state #(do {:repl nil :known-contexts {}})))
 
-(defonce- state (client.new-state #(do {:repl nil})))
+(set M.buf-suffix ".scm")
+(set M.comment-prefix "; ")
 
-(def buf-suffix ".scm")
-(def comment-prefix "; ")
-(def context-pattern "%(define%-module%s+(%([%g%s]-%))")
-(def form-node? ts.node-surrounded-by-form-pair-chars?)
+(local base-module "(guile)")
+(local default-context "(guile-user)")
 
-(defn- with-repl-or-warn [f opts]
+(fn M.valid-str? [code] (ts.valid-str? :scheme code))
+
+(fn normalize-context [arg] 
+  (let [tokens  (str.split arg "%s+") 
+        context (.. "(" (str.join " " tokens) ")")]
+    context))
+
+(fn strip-comments [f]
+  (string.gsub f ";.-\n" ""))
+
+(fn M.context [f] 
+  (let [stripped (strip-comments (.. f "\n"))
+        define-args (string.match stripped "%(define%-module%s+%(%s*([%g%s]-)%s*%)")]
+    (if define-args 
+      (normalize-context define-args) 
+      nil)))
+
+(set M.form-node? ts.node-surrounded-by-form-pair-chars?)
+
+(fn with-repl-or-warn [f _opts]
   (let [repl (state :repl)]
     (if (and repl (= :connected repl.status))
       (f repl)
-      (log.append [(.. comment-prefix "No REPL running")]))))
+      (log.append [(.. M.comment-prefix "No REPL running")]))))
 
-(defn- format-message [msg]
+(fn format-message [msg]
   (if
     msg.out
     (text.split-lines msg.out)
@@ -49,16 +71,16 @@
     msg.err
     (-> msg.err
         (string.gsub "%s*Entering a new prompt%. .*]>%s*" "")
-        (text.prefixed-lines comment-prefix))
+        (text.prefixed-lines M.comment-prefix))
 
-    [(.. comment-prefix "Empty result")]))
+    [(.. M.comment-prefix "Empty result")]))
 
-(defn- display-result [msg]
+(fn display-result [msg]
   (log.append
     (->> (format-message msg)
          (a.filter #(not= "" $1)))))
 
-(defn- clean-input-code [code]
+(fn clean-input-code [code]
   "Guile will take newlines as input and produce no result (unlike every other
   REPL I know?), so we want to strip out whitespace at either end and then just
   return nothing if it's empty. We shouldn't send code that contains nothing,
@@ -67,37 +89,69 @@
     (when (not (str.blank? clean))
       clean)))
 
-(defn eval-str [opts]
+(fn completions-enabled? [] 
+  (cfg [:enable_completions]))
+
+(fn build-switch-module-command [context]
+  (.. ",m " context))
+
+(fn init-module [repl context]
+  (log.dbg (.. "Initializing module for context " context))
+  (repl.send 
+    (.. (build-switch-module-command context) "\n,import " base-module)
+    (fn [_]))
+  (when (completions-enabled?)
+    (repl.send 
+      cmpl.guile-repl-completion-code 
+      (fn [_]))))
+
+(fn ensure-module-initialized [repl context]
+  (when (not (a.get-in (state) [:known-contexts context]))
+    (init-module repl context)
+    (a.assoc-in (state) [:known-contexts context] true)))
+
+(fn M.eval-str [opts]
   (with-repl-or-warn
     (fn [repl]
-      (-?> (.. ",m " (or opts.context "(guile-user)") "\n" opts.code)
-           (clean-input-code)
-           (repl.send
-             (fn [msgs]
-               (when (and (= 1 (a.count msgs))
-                          (= "" (a.get-in msgs [1 :out])))
-                 (a.assoc-in msgs [1 :out] (.. comment-prefix "Empty result")))
+      (if (M.valid-str? opts.code)
+       (let [context (or opts.context default-context)]
+        (ensure-module-initialized repl context) 
+        (-?> (.. (build-switch-module-command context) "\n" opts.code)
+             (clean-input-code)
+             (repl.send
+               (fn [msgs]
+                 (when (and (= 1 (a.count msgs))
+                            (= "" (a.get-in msgs [1 :out])))
+                   (a.assoc-in msgs [1 :out] (.. M.comment-prefix "Empty result")))
 
-               (when opts.on-result
-                (opts.on-result (str.join "\n" (format-message (a.last msgs)))))
-               (a.run! display-result msgs))
-             {:batch? true})))))
+                 (when opts.on-result
+                   (opts.on-result (str.join "\n" (format-message (a.last msgs)))))
+                 (when (not opts.passive?)
+                   (a.run! display-result msgs)))
+               {:batch? true})))
+       (log.append [(.. M.comment-prefix "eval error: could not parse form")])))))
 
-(defn eval-file [opts]
-  (eval-str (a.assoc opts :code (.. "(load \"" opts.file-path "\")"))))
+(fn M.eval-file [opts]
+  (M.eval-str (a.assoc opts :code (.. "(load \"" opts.file-path "\")"))))
 
-(defn doc-str [opts]
-  (eval-str (a.update opts :code #(.. "(procedure-documentation " $1 ")"))))
+(fn M.doc-str [opts]
+  (M.eval-str (a.update opts :code #(.. ",d " $1))))
 
-(defn- display-repl-status []
+(fn display-repl-status []
   (let [repl (state :repl)]
+    (log.dbg (a.str "client.guile.socket: repl=" repl))
     (when repl
       (log.append
-        [(.. comment-prefix
-             (let [pipename (a.get-in repl [:opts :pipename])]
+        [(.. M.comment-prefix
+             (let [pipename (a.get-in repl [:opts :pipename])
+                   host-port (a.get-in repl [:opts :host_port])]
                (if pipename
                  (.. pipename " ")
-                 ""))
+
+                 host-port
+                 (.. host-port " ")
+
+                 "no pipename & no host-port"))
              "(" repl.status
              (let [err (a.get repl :err)]
                (if err
@@ -106,29 +160,62 @@
              ")")]
         {:break? true}))))
 
-(defn disconnect []
+(fn M.disconnect []
   (let [repl (state :repl)]
     (when repl
       (repl.destroy)
       (a.assoc repl :status :disconnected)
       (display-repl-status)
-      (a.assoc (state) :repl nil))))
+      (a.assoc (state) :repl nil)))
+  (a.assoc (state) :known-contexts {}))
 
-(defn- parse-guile-result [s]
-  (let [prompt (s:find "scheme@%([%w%-%s]+%)> ")]
+(fn M.parse-guile-result [s stray-output-fn]
+  (let [find-prompt (fn [s] (s:find "scheme@%([%w%-%s]+%)> "))
+        prompt (find-prompt s)]
     (if
       prompt
-      (let [(ind1 _ result) (s:find "%$%d+ = ([^\n]+)\n")
-            stray-output (s:sub
-                           1
-                           (- (if result ind1 prompt) 1))]
-        (when (> (length stray-output) 0)
-          (log.append
-            (-> (text.trim-last-newline stray-output)
-                (text.prefixed-lines "; (out) "))))
+      (let [s-no-prompt (s:sub 0 (- prompt 1))
+            lines (->> (text.split-lines s-no-prompt)
+                       (a.mapcat
+                         (fn [line]
+                           ;; If the line ends with a "$x = y" result we split this into two lines.
+                          (if (string.match line "^(.-)%s*%$%d+ = .*$")
+                            (let [before (string.match line "^(.-)%s*%$%d+ = .*$")
+                                  after (string.match line "^.-%s*(%$%d+ = .*)$")]
+                              [before after])
+                            [line]))))
+            stray-output-lines []
+            results []]
+
+        ;; Iterate over the lines of the output.
+        ;; A line structured as "$\d+ = (.*)" can be captured as as a member of results.
+        ;; Anything else gets appended to stray-output-lines with a "; (out) " prefix.
+
+        (each [_n line (ipairs lines)]
+          (let [result (string.match line "^%$%d+ = (.*)$")]
+            (if
+              result
+              (table.insert results result)
+
+              (when (not= "" line)
+                (table.insert stray-output-lines (.. M.comment-prefix "(out) " line))))))
+
+        (when (> (length stray-output-lines) 0)
+          (stray-output-fn stray-output-lines))
+
         {:done? true
          :error? false
-         :result result})
+
+         ;; Result is formed by either taking the single value of results if there's only one.
+         ;; Or if there's more than one we join them like "(values x y z)" where the variables are the results.
+         :result (if
+                   (= 1 (length results))
+                   (a.first results)
+
+                   (> (length results) 1)
+                   (.. "(values " (str.join " " results) ")")
+
+                   nil)})
 
       (s:find "scheme@%([%w%-%s]+%) %[%d+%]>")
       {:done? true
@@ -139,39 +226,97 @@
        :error? false
        :result s})))
 
-(defn connect [opts]
-  (disconnect)
-  (let [pipename (or (cfg [:pipename]) (a.get opts :port))]
-    (if (not= :string (type pipename))
-      (log.append
-        [(.. comment-prefix "g:conjure#client#guile#socket#pipename is not specified")
-         (.. comment-prefix "Please set it to the name of your Guile REPL pipe or pass it to :ConjureConnect [pipename]")])
-      (a.assoc
-        (state) :repl
-        (socket.start
-          {:parse-output parse-guile-result
-           :pipename pipename
-           :on-success
-           (fn []
-             (display-repl-status))
-           :on-error
-           (fn [msg repl]
-             (display-result msg)
-             (repl.send ",q\n" (fn [])))
-           :on-failure disconnect
-           :on-close disconnect
-           :on-stray-output display-result})))))
+(fn M.connect [_opts]
+  (M.disconnect)
+  (let [pipename (cfg [:pipename])
+        cfg-host-port (cfg [:host_port])
+        host-port (when cfg-host-port
+                    ;; Default missing parts but not fool-proof.
+                    (let [[host port] (vim.split cfg-host-port ":")]
+                      (log.dbg (a.str "client.guile.socket: host=" host))
+                      (log.dbg (a.str "client.guile.socket: port=" port))
+                      (if (and (not host) (not port))
+                          "localhost:37146" ;; Guile default to listen on local port.
 
-(defn on-exit []
-  (disconnect))
+                          (and (not host) (tonumber port))
+                          (a.str "localhost:" port)
 
-(defn on-filetype []
+                          (and host (not port))
+                          (if (tonumber host)
+                              (a.str "localhost:" host)
+                              (a.str host ":37146"))
+                          cfg-host-port)))]
+
+    (log.dbg (a.str "client.guile.socket: pipename=" pipename))
+    (log.dbg (a.str "client.guile.socket: host-port=" cfg-host-port))
+
+    (a.assoc
+      (state) :repl
+      (socket.start
+        {:parse-output #(M.parse-guile-result $1 log.append)
+         :pipename pipename
+         :host-port host-port
+         :on-success (fn []
+                       (when (completions-enabled?)
+                         (cmpl.get-static-completions))
+                       (display-repl-status))
+         :on-error (fn [msg repl]
+                     (display-result msg)
+                     (repl.send ",q\n" (fn []))) ; Don't bother with debugger.
+         :on-failure M.disconnect
+         :on-close M.disconnect
+         :on-stray-output display-result}))))
+
+(fn connected? []
+  (if (state :repl)
+    true
+    false))
+
+(fn busy? []
+  (and (connected?) 
+       (. (state :repl) :current)))
+
+(fn M.on-exit []
+  (M.disconnect))
+
+(fn M.on-filetype []
   (mapping.buf
     :GuileConnect (cfg [:mapping :connect])
-    #(connect)
+    #(M.connect)
     {:desc "Connect to a REPL"})
 
   (mapping.buf
     :GuileDisconnect (cfg [:mapping :disconnect])
-    disconnect
+    #(M.disconnect)
     {:desc "Disconnect from the REPL"}))
+
+(fn generate-completions [opts]
+   (let [prefix (or (. opts :prefix) "")
+         static-suggestions (cmpl.get-static-completions prefix)]
+     (if (and (connected?) (not (busy?)))
+       (let [code (cmpl.build-completion-request opts.prefix)
+             result-fn 
+             (fn [results]
+               (let [cmpl-list (cmpl.format-results results)
+                     all-cmpl (a.concat static-suggestions cmpl-list)
+                     distinct-cmpl (util.ordered-distinct all-cmpl)]
+                 ;(log.append [(.. "; in completions()'s result-fn, called with: " (a.pr-str results))] )
+                 ;(log.append [(..  "; in completions()'s result-fn, calling opts.cb with " (a.pr-str cmpl-list))])
+                 (opts.cb distinct-cmpl)
+                 ; return the list of completions
+                 ))
+            ]
+         (a.assoc opts :code code)
+         (a.assoc opts :on-result result-fn)
+         (a.assoc opts :passive? true)
+         (M.eval-str opts))
+       (opts.cb static-suggestions))))
+
+(fn M.completions [opts]
+  ;(when (not= nil opts)
+  ;  (log.append [(.. "; completions() called with: " (a.pr-str opts))] {:break? true}))
+  (if (completions-enabled?)
+    (generate-completions opts)
+    (opts.cb [])))
+
+M

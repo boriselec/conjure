@@ -278,14 +278,12 @@ configure the ones you care about one at a time you can set:
 
                                                    *g:conjure#filetype#fennel*
 `g:conjure#filetype#fennel`
-            Client to use for `fennel` buffers. Conjure also ships with an
-            alternative `"conjure.client.fennel.stdio"` client which allows
-            you to work with Fennel (without Aniseed) outside of Neovim in an
-            external Lua process.
-            This default Fennel client implementation uses a vendored copy of
-            Aniseed (which contains a vendored Fennel compiler) for all evaluations.
-            Help: |conjure-client-fennel-aniseed|, |conjure-client-fennel-stdio|
-            Default: `"conjure.client.fennel.aniseed"`
+            Client to use for `fennel` buffers. By default we evaluate fennel
+            with a vendorded copy of nfnl within Neovim. You can also swap to
+            the legacy Aniseed based client or an stdio client if you wish to
+            execute code in a sub-Lua process outside of Neovim.
+            Help: |conjure-client-fennel-nfnl|, |conjure-client-fennel-aniseed|, |conjure-client-fennel-stdio|
+            Default: `"conjure.client.fennel.nfnl"`
 
                                                     *g:conjure#filetype#janet*
 `g:conjure#filetype#janet`
@@ -592,6 +590,18 @@ configure the ones you care about one at a time you can set:
             How long should the highlight last in milliseconds.
             Default: `500`
 
+                                                   *g:conjure#log#split#width*
+`g:conjure#log#split#width`
+            Width of the log vsplit as a percentage of the editor width.
+            A float between 0.0 and 1.0.
+            Default: `nil`
+
+                                                  *g:conjure#log#split#height*
+`g:conjure#log#split#height`
+            Height of the log split as a percentage of the editor height.
+            A float between 0.0 and 1.0.
+            Default: `nil`
+
                                                      *g:conjure#log#hud#width*
 `g:conjure#log#hud#width`
             Width of the HUD as a percentage of the editor width.
@@ -629,7 +639,7 @@ configure the ones you care about one at a time you can set:
             HUD opened before it'll be passively closed from cursor movement.
             This delay means evaluations that involve cursor movement etc
             won't close the HUD the moment it displays.
-            Default: `20`
+            Default: `250`
 
                                            *g:conjure#log#hud#overlap_padding*
 `g:conjure#log#hud#overlap_padding`
@@ -674,6 +684,20 @@ configure the ones you care about one at a time you can set:
               :let g:conjure#log#hud#ignore_low_priority = v:true
 <
             Default: `false`
+
+                                                 *g:conjure#log#hud#open_when*
+`g:conjure#log#hud#open_when`
+            Decide when the HUD will open. By default we open when the last
+            line in the log isn't visible. So if you have the log open in a
+            split but you can't quite see the bottom, the HUD will still open.
+
+            Set this to `"log-win-not-visible"` if you would like the HUD to
+            never open if you have the log open in a window at all. Even if
+            you can't see the bottom line.
+
+            You can set `g:conjure#log#hud#enabled` to `false` if you never
+            want to see the HUD.
+            Default: `"last-log-line-not-visible"`
 
                                                       *g:conjure#log#botright*
 `g:conjure#log#botright`
@@ -766,12 +790,13 @@ configure the ones you care about one at a time you can set:
 `g:conjure#extract#context_header_lines`
             How many lines of the file should be checked for a context
             (namespace name) such as `(module foo.bar)` or `(ns foo.bar)`
-            which is used for setting the right context for evaluations.
-            If you have buffers with huge comment headers you may want to set
-            this higher.
-            If a specific buffer isn't extracting the context correctly, you
-            can override it by setting `b:conjure#context`.
-            Default: `24`
+            which is used for setting the right context for evaluations. You
+            can hard code a context for a particular buffer by setting
+            `b:conjure#context`.
+            This defaults to `-1` which means "all lines" but you can set it
+            to something like `30` if you're experiencing performance issues
+            in some buffers or projects.
+            Default: `-1`
 
                                                 *g:conjure#extract#form_pairs*
 `g:conjure#extract#form_pairs`
@@ -966,6 +991,7 @@ your dotfiles.
  - |conjure-client-clojure-nrepl|
  - |conjure-client-janet-netrepl|
  - |conjure-client-janet-stdio|
+ - |conjure-client-javascript-stdio|
  - |conjure-client-hy-stdio|
  - |conjure-client-racket-stdio|
  - |conjure-client-scheme-stdio|
@@ -1015,7 +1041,7 @@ examples: https://github.com/Olical/conjure/wiki/Client-features
 `context`
             Function(header)
             Called instead of `context-pattern` if it's not defined. Is passed
-            the first few lines of the buffer as it's only argument. You can
+            the first few lines of the buffer as its only argument. You can
             parse out the context string in any way you see fit.
             The return value is passed into later functions as `opts.context`.
 
@@ -1181,6 +1207,18 @@ examples: https://github.com/Olical/conjure/wiki/Client-features
                mixing up the return types of this system and may cause deep
                regret at a later date but for now, it's pretty darn useful
                when we really need it.
+
+`modify-client-exec-fn-opts`
+            Function(action, f-name, opts)
+            Called when a client function is about to be executed. You can
+            (optionally) implement this in your client to allow you to modify
+            the `opts` table (through mutation) before it's used. For example,
+            this means you can set `:passive?` on the table in order to
+            prevent the request from being displayed in the log and HUD.
+
+            Useful if you wish to handle the full display lifecycle of this
+            client function in your client code instead of relying on the
+            shared infrastructure.
 
 `comment-node?`
             Function(node)
